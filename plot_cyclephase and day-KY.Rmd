@@ -1,0 +1,143 @@
+---
+title: "ADHD-KY Plotting Across Cycle"
+author: "Jordan Barone"
+date: "2022-10-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Step 1: packages, working directory, import data
+```{r setup}
+
+#libraries: not all of these will be used in this script, but this list is pretty exhaustive for data cleaning
+library(haven) #for reading files
+library(ggplot2) #for plotting
+library(tidyverse) #for data management and manipulation
+library(zoo) #for rolling averages
+library(janitor) #nice cleaning functions
+library(psych) #good describe/summary functions
+library(visdat) #visualize data
+library(skimr) #useful skimming functions for big datasets
+library(lubridate) #for manipulating dates
+library(readxl) #if you are importing an excel with multiple sheets
+
+#set your working directory (this is where the code and any output will get saved)
+setwd("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_DAILY/02_data_prep_workspace/")
+
+#import your file
+#recommended for CLEAR Lab: use SPSS file format downloaded from qualtrics - this allows us to preserve label options and values with nice formatting
+Clear2DailyData <- read_spss("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_DAILY/01_raw_data/2022-04-15 clear2daily raw.sav")
+
+```
+
+
+```{r}
+didnotovulate <- c(38, 218, 223, 241, 245, 246, 248, 250, 253)
+
+#save new dataframe without all excluded participants
+etoh_data_n23 <- etoh_data %>% 
+  filter(!id %in% didnotovulate) 
+
+```
+
+
+```{r}
+
+#function to create person means
+create.person.mean <- function(df, var, ...) {
+  df %>%
+    group_by(...) %>%
+    mutate("{{var}}.m" := mean({{var}}, na.rm=T))
+}
+#function to create person deviations (note, must have person means already made)
+create.deviation <- function(df, var, var.m) {
+  df <- df %>%
+    rowwise() %>%
+    mutate("{{var}}.d" := {{var}} - {{var.m}})
+}
+
+```
+
+```{r}
+#create list of outcomes
+suimed_varlist <- c("BAM2_stirredupscream",
+           "DRSP7_angirr",
+           "DRSP4_anxious") %>% noquote()
+
+
+suimed_varlist <- suimed_varlist[-1]
+
+
+
+#execute for loop: run create.person.mean() on everything in "outcomelist"
+for (i in suimed_varlist) {
+  suimeddata_cycleday <- create.person.mean(suimeddata_cycleday, !!sym({{i}}), id)
+}
+#execute for loop: run create.deviation() on everything in list
+for (i in suimed_varlist) {
+  suimeddata_cycleday <- create.deviation(suimeddata_cycleday, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+```
+
+```{r}
+suimeddata_cycleday %>% relocate(ends_with(".d")) %>%
+  pivot_longer(ends_with(".d"),
+        names_to = "predictor",
+        values_to = "deviation") %>%
+  group_by(hybridcycleday, predictor) %>%
+  summarize(personcentered.dev = mean(deviation, na.rm=T),
+            se=sd(deviation, na.rm=T)/sqrt(n())) %>%
+  arrange(factor(hybridcycleday, levels = hybridcycleday_order)) %>%
+  mutate(roll= rollapply(personcentered.dev, 3, 
+                         mean, align = "center", fill=NA)) %>%
+  ggplot(aes(x=factor(hybridcycleday, levels = hybridcycleday_order), y=roll,
+             group=predictor, color=predictor))+
+  geom_line()+
+  geom_hline(yintercept = 0, linetype="dashed", col="gray")+
+  #geom_errorbar(aes(ymin=roll-se, ymax=roll+se), 
+   #             size=0.5, width=0.5, position=position_dodge())+
+  scale_y_continuous(expand = c(0,0.005))+
+  theme_bw()+
+  xlab("Cycle Day (based on LH-surge and menses self-report)")+
+  ylab("Person-Centered Affective Variables")+
+  annotate("text", x="0L", y=-0.32, label="*", size=8, color="blue")+
+  annotate("text", x="1M", y=-0.32, label="*", size=8, color="blue")+
+  labs(color = "")+
+  theme(legend.position = "bottom")
+```
+
+
+11/1/22: Phase graphs
+```{r}
+#person-mean-center
+data_for_plot1a <- etoh_data %>% group_by(id, LH_cyclephasenames) %>% 
+  summarize(drinkingprob.m=mean(drinkingprob.m),
+            drinkingprobphase.m = mean(drinkingday_today, na.rm = TRUE),
+            drinkingprobphase.d = drinkingprobphase.m - drinkingprob.m)
+
+plot1a <- data_for_plot1a %>% 
+  group_by(LH_cyclephasenames) %>%
+  summarize(grand.m.drinkingprob.d = mean(drinkingprobphase.d, na.rm=T),
+            se=sd(drinkingprobphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=LH_cyclephasenames, y=grand.m.drinkingprob.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("midfol" = "Midfollicular", 
+                            "midlut" = "Midluteal",
+                            "perimen" = "Perimenstrual",
+                            "periov" = "Periovulatory"))+
+  scale_y_continuous(limits = c(-0.05, 0.10))+
+  geom_errorbar(aes(ymin=grand.m.drinkingprob.d-se, 
+                    ymax=grand.m.drinkingprob.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered Prob. of Drinking")
+```
+

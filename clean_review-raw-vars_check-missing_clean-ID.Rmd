@@ -1,0 +1,145 @@
+---
+title: "CLEAR Trial Data Cleaning - DAILY"
+author: "Jordan Barone"
+date: "8/23/2021"
+output: html_document
+---
+
+#markdown setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+#script setup
+```{r}
+
+#only run this line if you want to clear your workspace befor starting
+rm(list=ls())
+
+#load libraries
+library(ggplot2) #plot
+library(lubridate) #clean dates
+library(knitr) #make easy tables
+library(janitor) #some useful cleaning functions
+library(stringr) #clean by matching strings
+library(haven) #preferred import pacakge for SPSS files
+library(tidyverse) #syntax
+library(skimr) #some useful summary functions
+library(visdat) #visualize data - great for missingness
+library(assertive) #use for functions like "assert_all_are_in_past" 
+
+
+#read in daily dataset
+#recommended: download from qualtrics as an SPSS file, this allows us to preserve label options and values with nice formatting
+
+#change the name of the object (left of "<-") and change your path to whatever dataset you're working with (right of "<-")
+Clear2DailyData <- read_spss("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_DAILY/01_raw_data/2022-07-28 clear2daily raw.sav")
+
+
+```
+
+#date prep and cleaning
+-glimpse %>% summary: ensure that the number of total rows and columns seems good
+
+-skim function: check that id and daterated have NO missing values
+  - note on skim: it can't read labelled doubles (aka the type of variable SPSS contains, with labels embedded), so it will think everything is a character - not a problem
+```{r}
+
+## get overview of data ## 
+glimpse(Clear2DailyData) %>% summarize() #get a row value, column value, variable type, and see the first few values of each variable
+skim(Clear2DailyData) %>% View() #i like View when the df will be bigger than my console screen; this is a good function to check basic missingness, mins and maxs, etc
+
+#check ID
+str(Clear2DailyData$id) #see variables and labeled options
+Clear2DailyData$id <- as.numeric(Clear2DailyData$id) #format as numeric
+
+#check date
+str(Clear2DailyData$daterated)
+#format all CLEAR2 dates as R-readable dates (lubridate package)
+Clear2DailyData$daterated <- mdy(Clear2DailyData$daterated)
+
+#add weekend variable to clear2
+# step 1: add dayofweek to clear2
+## note that R lubridate defaults to 1=Monday, we want 1=Sunday to match CLEAR-1 SAS convention
+## THIS CAN VARY based on how you want to set your week day start - just be sure you know
+Clear2DailyData$dayofweek <- wday(Clear2DailyData$daterated, week_start = 7) 
+
+# step 2: days 6/7/1 are friday/saturday/sunday
+Clear2DailyData <- Clear2DailyData %>% 
+  mutate(frisatsun = ifelse(dayofweek >=6 | dayofweek==1, 1, 0))
+```
+
+# check each dataset (how many rows? vars? participants?)
+```{r interim data check}
+
+##CLEAR2:
+#number of total surveys
+dim(Clear2DailyData)[1]
+#number of variables
+dim(Clear2DailyData)[2] 
+#number of participants
+length(unique(Clear2DailyData$id))
+```
+
+# Rvisualize data
+```{r}
+
+#visualize the variables types in your dataset
+vis_dat(Clear2DailyData, warn_large_data = FALSE)
+
+#visualize where you have missing data
+vis_miss(Clear2DailyData, warn_large_data = FALSE)
+```
+
+#Example: clean and confirm ID
+*the type of errors you may see that MUST be fixed:*
+  # ",259" should be "259"
+  # 2520 should be 252
+  # 299 is not a participant
+  # NA is not an ID, and you need to find out if this was a blank row, or if the data belongs to someone
+```{r}
+
+#are all the ID numbers correct? see notes in text above
+Clear2DailyData %>% group_by(id) %>% summarize()
+
+#is there a participant you KNOW you need to remove?
+Clear2DailyData <- Clear2DailyData %>%
+  filter(id !=228)
+
+```
+
+#row and column cleaning
+``` {r}
+
+#remove any rows or columns that are all NA
+Clear2DailyData <- Clear2DailyData %>% remove_empty()
+
+#how many rows now?
+dim(Clear2DailyData) [1] 
+
+#how many columns now?
+dim(Clear2DailyData) [2]
+
+#what are the column names?
+colnames(Clear2DailyData)
+
+#remove columns from qualtrics metadata
+Clear2DailyData <- Clear2DailyData %>% select(-c(Status,
+                                              Duration__in_seconds_,
+                                              ResponseId,
+                                              UserLanguage,
+                                              DistributionChannel,
+                                              IDN))
+
+```
+
+
+### export file [always make saving its own chunk so you remember to rename!]
+```{r}
+#CHANGE FILE NAME BELOW, then save!
+write_sav(Clear2DailyData, "../03_cleaned_data/2022-07-28_clear2dailysurvey.sav")
+
+##MAKE SURE YOU MOVE THE FILE INTO THE "CLEANED" FOLDER IF IT IS READY!
+
+```

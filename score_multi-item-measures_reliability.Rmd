@@ -1,0 +1,101 @@
+---
+title: "CLEAR Scoring Template--Draft"
+author: "Cassandra M. Brandes"
+date: "2022-09-12"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Scoring Template for Multi-Item Scales & Behavioral Measures
+
+This is a template for scoring multi-item self-report scales and behavioral measures in the CLEAR lab. Don't forget to change the information in lines 2-4 of this RMarkdown file as appropriate for your project!
+
+## Import Data
+
+Use this first code chunk below to import your libraries, set your working directory (file path where you would like to save your output), import your data, and subset your data. The libraries included below are some commonly useful libraries AND the ones you will need for scoring measures/getting reliability stats. Using hashtags to add headers to your RMarkdown (outside of code chunks) is helpful for people using your file to navigate the file using the outline bar in Rstudio. Also you can label all of your code chunks to help with file navigation. Here is a cheatsheet for RMarkdown: https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf
+
+```{r libraries and data import}
+library(Hmisc)  # for describing categorical data
+library(psych)  # for scoring scales & describing continuous data
+library(haven) # for reading files, especially useful for importing SPSS files 
+library(ggplot2) # for plotting
+
+setwd("")  # set working directory
+
+raw.data <- read_csv("")  # import raw data using haven; you can also use read.csv() in base R
+
+### Reminders--Delete After Use ###
+# make sure you're using csv with correct sub-sample 
+# subset your data if needed when working with files with tons of variables
+# don't forget to put .csv at the end of your filename
+```
+
+## Check Your Data
+
+Ideally, you will have already cleaned your data and checked for entry errors, that missing data is coded correctly, etc. before this stage. However, let's use this portion of code to double check anyways!
+
+```{r check}
+colnames(raw.data)  # returns column names for referencing below
+
+Hmisc::describe(raw.data[, c("")])  # describe categorical variables such as ID number, etc., separated by commas; ensure you have the expected amount
+
+# if you don't have the expected amount, stop here, go back, and clean your data!
+
+psych::describe(raw.data[, c("")])  # describe continuous variables, esp. the items of the measure you're going to score, separated by commas
+
+### Reminders--Delete After Use ###
+# if there are tons of items, you can use the column numbers instead of variable names in the code above
+# check for out-of-range values (e.g., 9 on a 1-5 scale), more missing data than expected, etc.
+```
+
+# Scoring Key
+
+In this portion of code, you create your scoring key. This tells the psych::scoreItems() function which items should be put together when calculating each scale. 
+
+If you have reverse-scored items (e.g., "I am comfortable with public speaking" on a social anxiety scale), you add a "-" before the item name, inside the quotes. In the example below, items 3, 4, 6, 8, and 10 are reverse-scored.
+
+```{r key}
+scale.keys <- list(Scale1 = c("item1", "item2", "-item3"),  
+                   Scale2 = c("item5", "item7", "-item8", "item9"), 
+                   Scale3 = c("-item4", "-item6", "-item10"))  # scoring key, with scale names before the equals sign and item names (columns in raw data) in quotes
+
+### Reminders--Delete After Use ###
+# replace scale AND item names above as needed
+# add more scales by adding a comma after the vector of item names
+# ensure that your variable names match those listed in quotes exactly!
+```
+
+# Score Measure
+
+The psych::scoreItems() function below is the main event of this code file. It will compute scale scores for your measure and reliability for your scales. 
+
+There are many arguments for customizing this function (see the vignette), but probably the most important one is the "totals" argument. When the default totals = FALSE option is used, it computes a mean (average) of the items on each scale. When the totals = TRUE option is used, it computes a sum of the items on each scale. If you use totals = TRUE and do not select an option for imputation, the function will issue a warning, as all NAs will be counted as 0's (and you likely don't want this).
+
+The psych::scoreItems() function returns a list with multiple elements, one of which is a matrix of your participants' scores on each scale. We will use the code below to extract those scores and merge them with the raw data file.
+
+```{r scoreItems}
+sI.list <- scoreItems(keys = scale.keys, items = raw.data, totals = FALSE, missing = TRUE, 
+           impute = "none", digits = 3)  # in this example, items are mean scored, incomplete cases are used, no imputation is used, and scale scores are printed to the 3rd decimal place
+
+scored.data <- cbind(raw.data, sI.list$scores)  # merges raw data w/ matrix of participant scores
+
+write.csv(scored.data, "")  # don't forget to save your scored dataset somewhere!
+```
+
+
+# Reliability
+
+In this chunk, we simply print the results of the psych::scoreItems() function. This displays reliability data for all of the scales you just computed. This includes coefficient alpha (often called Cronbach's alpha), average inter-item correlations (AIC), and other internal consistency metrics that show how well the different items of your scale agree with one another.
+
+```{r reliability}
+sI.list  # using the object created above, runs shows scoreItems results
+```
+
+

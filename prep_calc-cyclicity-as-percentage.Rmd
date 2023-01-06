@@ -1,0 +1,431 @@
+---
+title: "CYCALCMOT Analysis"
+author: "Jordan Barone"
+date: "8/9/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+#Setup:
+-data
+-libraries
+-wd
+By this point, daily data should be cleaned and merged for both clear1 and clear2.
+Trait data should be cleaned and merged (with each other, NOT with daily dataset yet)
+```{r}
+library(haven) #for reading files
+library(ggplot2) #for plotting
+library(tidyverse) #for data management and manipulation
+library(zoo)
+library(questionr) #needed to explore nesting
+library(gmodels) #makes nice cross-tabs table
+library(psych) #use for describe function to get descriptives
+library(car) #to get correct Type III F-tests of multi-df effects in regression model
+
+setwd("~/Box/01 - CLEAR Lab Data & Analyses/Studies_Projects/CLEARCOMBINED_projects/CLEARCOMBINED_ETOH/03_code_dataedits_output")
+
+etoh_daily <- read_csv("2021-09-10_cycleETOH_daily_cleanedprepped.csv", guess_max = 15000)
+#make sure vars imported as right type
+spec(etoh_daily)
+
+#make sure using csv with correct subsample
+etoh_daily %>% group_by(id) %>% summarize(n=n())
+
+```
+
+## CENTER - ref code
+```{r}
+
+#grand mean
+etoh_daily %>% summarize(minDRSP1 = round(min(DRSP1_depblue, na.rm = TRUE),2),
+                      maxDRSP1 = round(max(DRSP1_depblue, na.rm = TRUE),2),
+                      meanDRSP1 = round(mean(DRSP1_depblue, na.rm = TRUE),2),
+                      sdDRSP1 = round(sd(DRSP1_depblue, na.rm = TRUE),2))
+
+#person mean
+etoh_daily %>% group_by(id) %>% summarise(DRSP1m = round(mean(DRSP1_depblue, na.rm = TRUE), digits = 2))]
+
+Ashleysdata %>% group_by(id) %>% mutate(impulsivity.m = mean(impulsivity, na.rm=T))
+
+#save person mean as a trait level var
+etoh_daily %>% group_by(id) %>%
+  mutate(DRSP1m = mean(DRSP1_depblue, na.rm = TRUE)) %>% select(id, DRSP1_depblue, DRSP1m)
+
+#person mean centered - state var
+etoh_daily %>% group_by(id) %>% 
+  mutate(DRSP1d = scale(DRSP1_depblue, center = TRUE)) %>%
+  select(id, DRSP1_depblue, DRSP1m, DRSP1d)
+
+etoh_daily %>% group_by(id) %>% 
+	rowwise() %>%
+  mutate(DRSP1d = DRSP1_depblue - DRSP1.m)) 
+
+```
+
+#person-mean calculation
+Dataset <- Dataset %>% group_by(id) %>%
+	mutate(impulsivity.m = mean(impulsivity, na.rm=T))
+
+#person-centeerd deviation
+Dataset <- Dataset %>% group_by(id) %>%
+	rowwise() %>%
+	mutate(impulsivity.d = impulsivitytoday - impulsivity.m)
+		
+
+
+## CENTER - all affect vars
+```{r}
+
+#grand mean
+overall_summary <- etoh_daily %>% 
+  summarize(minDRSP1 = round(min(DRSP1_depblue, na.rm = TRUE),2),
+                      maxDRSP1 = round(max(DRSP1_depblue, na.rm = TRUE),2),
+                      meanDRSP1 = round(mean(DRSP1_depblue, na.rm = TRUE),2),
+                      sdDRSP1 = round(sd(DRSP1_depblue, na.rm = TRUE),2),
+                      minDRSP2 = round(min(DRSP2_hopeless, na.rm = TRUE),2),
+                      maxDRSP2 = round(max(DRSP2_hopeless, na.rm = TRUE),2),
+                      meanDRSP2 = round(mean(DRSP2_hopeless, na.rm = TRUE),2),
+                      sdDRSP2 = round(sd(DRSP2_hopeless, na.rm = TRUE),2),
+                      minDRSP3 = round(min(DRSP3_worthguilt, na.rm = TRUE),2),
+                      maxDRSP3 = round(max(DRSP3_worthguilt, na.rm = TRUE),2),
+                      meanDRSP3 = round(mean(DRSP3_worthguilt, na.rm = TRUE),2),
+                      sdDRSP3 = round(sd(DRSP4_anxious, na.rm = TRUE),2),
+                      minDRSP4 = round(min(DRSP4_anxious, na.rm = TRUE),2),
+                      maxDRSP4 = round(max(DRSP4_anxious, na.rm = TRUE),2),
+                      meanDRSP4 = round(mean(DRSP5_moodswings, na.rm = TRUE),2),
+                      sdDRSP4 = round(sd(DRSP5_moodswings, na.rm = TRUE),2),
+                      minDRSP5 = round(min(DRSP5_moodswings, na.rm = TRUE),2),
+                      maxDRSP5 = round(max(DRSP5_moodswings, na.rm = TRUE),2),
+                      meanDRSP5 = round(mean(DRSP5_moodswings, na.rm = TRUE),2),
+                      sdDRSP5 = round(sd(DRSP5_moodswings, na.rm = TRUE),2),
+                      minDRSP6 = round(min(DRSP6_rejsens, na.rm = TRUE),2),
+                      maxDRSP6 = round(max(DRSP6_rejsens, na.rm = TRUE),2),
+                      meanDRSP6 = round(mean(DRSP6_rejsens, na.rm = TRUE),2),
+                      sdDRSP6 = round(sd(DRSP6_rejsens, na.rm = TRUE),2),
+                      minDRSP7 = round(min(DRSP7_angirr, na.rm = TRUE),2),
+                      maxDRSP7 = round(max(DRSP7_angirr, na.rm = TRUE),2),
+                      meanDRSP7 = round(mean(DRSP7_angirr, na.rm = TRUE),2),
+                      sdDRSP7 = round(sd(DRSP7_angirr, na.rm = TRUE),2),
+                      minDRSP8 = round(min(DRSP8_intconflict, na.rm = TRUE),2),
+                      maxDRSP8 = round(max(DRSP8_intconflict, na.rm = TRUE),2),
+                      meanDRSP8 = round(mean(DRSP8_intconflict, na.rm = TRUE),2),
+                      sdDRSP8 = round(sd(DRSP8_intconflict, na.rm = TRUE),2)) %>%
+  t()
+
+#person mean
+etoh_daily <- etoh_daily %>% group_by(id) %>% 
+  mutate(DRSP1m = mean(DRSP1_depblue, na.rm = TRUE),
+            DRSP2m = mean(DRSP2_hopeless, na.rm = TRUE),
+            DRSP3m = mean(DRSP3_worthguilt, na.rm = TRUE),
+            DRSP4m = mean(DRSP4_anxious, na.rm = TRUE),
+            DRSP5m = mean(DRSP5_moodswings, na.rm = TRUE),
+            DRSP6m = mean(DRSP6_rejsens, na.rm = TRUE),
+            DRSP7m = mean(DRSP7_angirr, na.rm = TRUE),
+            DRSP8m = mean(DRSP8_intconflict, na.rm = TRUE))
+
+#person mean centered
+etoh_daily <- etoh_daily %>% group_by(id) %>% 
+  mutate(DRSP1d = scale(DRSP1_depblue, center = TRUE, scale=FALSE),
+         DRSP2d = scale(DRSP2_hopeless, center = TRUE, scale=FALSE),
+         DRSP3d = scale(DRSP3_worthguilt, center = TRUE, scale=FALSE),
+         DRSP4d = scale(DRSP4_anxious, center = TRUE, scale=FALSE),
+         DRSP5d = scale(DRSP5_moodswings, center = TRUE, scale=FALSE),
+         DRSP6d = scale(DRSP6_rejsens, center = TRUE, scale=FALSE),
+         DRSP7d = scale(DRSP7_angirr, center = TRUE, scale=FALSE),
+         DRSP8d = scale(DRSP8_intconflict, center = TRUE, scale=FALSE))
+
+#another way to center **BETTER if you want to do subtraction by hand***:
+etoh_daily %>%
+  rowwise() %>%
+  mutate(DRSP1d = DRSP1 - DRSP1m) 
+
+#confirm that all worked
+etoh_daily %>% select(id, DRSP1_depblue, DRSP1m, DRSP1d)
+
+```
+
+## review - alcohol vars
+```{r}
+
+#mean drinks per day across all days
+etoh_daily %>% summarize(meandrinks = mean(numdrinks_yest, na.rm = TRUE))
+#mean drinks on drinking days
+etoh_daily %>% filter(drinkingday==1) %>% summarize(meanonDD = mean(numdrinks_yest))
+
+personsummaries <- etoh_daily %>% group_by(id) %>% 
+  summarize(DaysofBaseline = n(),
+            TotalDrinkingDaysBaseline = sum(drinkingday, na.rm = TRUE),
+            MinDrinksperDay = min(numdrinks_yest, na.rm = TRUE),
+            MaxDrinksperDay = max(numdrinks_yest, na.rm = TRUE),
+            BingeDrinkDays = sum(binge_yest==1, na.rm = TRUE))
+
+personsummaries %>% summarize(minBaseline = min(DaysofBaseline),
+                              maxBaseline = max(DaysofBaseline),
+                              meanBaseline = mean(DaysofBaseline),
+                              sdBaseline = sd(DaysofBaseline))
+grandsummaries
+
+```
+
+
+
+## UNLAG DATES
+```{r}
+
+#drinking day, binge vars
+etoh_daily <- etoh_daily %>% 
+  arrange(id, daterated) %>%
+  group_by(id) %>%
+  mutate(numdrinks_today = lead(numdrinks_yest),
+         drinkingday_today = lead(drinkingday),
+         binge_today = lead(binge_yest))
+
+#motives vars
+etoh_daily <- etoh_daily %>% 
+  arrange(id, daterated) %>%
+  group_by(id) %>%
+  mutate(DMQsocial_today = lead(DMQsocial),
+         DMQenhance_today = lead(DMQenhance),
+         DMQconform_today = lead(DMQconform),
+         DMQcope_today = lead(DMQcope))
+         
+
+```
+
+## CREATE PERSON-LEVEL AVG CYCLICITY
+FIRST confirm there is at least 3 days per phase, per person
+-221: only 2 days in perimenstrual phase
+-212, 217: only 3 days in either perimenstrual or midfol
+```{r}
+#FIRST confirm there is at least 3 days per phase, per person
+etoh_daily %>% group_by(id, perimenstrual_count, midfol_count) %>% 
+  filter(perimenstrual_count==1 | midfol_count==1) %>%
+  summarize(n=n()) %>% 
+  arrange(n)
+#remove: 221, 212, 217
+
+etoh_daily_premen_v_midfol <- etoh_daily %>% 
+  filter(id!=221) %>%
+  filter(id!=212) %>%
+  filter(id!=217)
+
+
+```
+
+## AVG CYCLICITY
+-( average perimenstrual ratings MINUS average midfollicular ratings ) / range of scale
+-range of scale is calculated based on the highest and lowest score they gave ANY DRSP item (example: if hopelessness is only ever rated 1-3, but anxiety goes 1-6, their range of scale is always 5)
+-combine perimenstrual and midfollicular from as many cycles as we have from that person
+-use RAW ratings (not centered)
+```{r}
+
+#create grouped dataframe of each ID's min and max DRSP rating
+temp1 <- etoh_daily_premen_v_midfol %>% group_by(id) %>% #first, group by id
+  summarize(DRSPmin= min(DRSP1_depblue, 
+ # min() is the function, then thelist tells R "get the MINIMUM of everything I've listed out#
+                     DRSP2_hopeless,
+                     DRSP3_worthguilt,
+                     DRSP4_anxious,
+                     DRSP5_moodswings,
+                     DRSP6_rejsens,
+                     DRSP7_angirr,
+                     DRSP8_intconflict, na.rm = TRUE),
+            DRSPmax= max(DRSP1_depblue, #same for max
+                     DRSP2_hopeless,
+                     DRSP3_worthguilt,
+                     DRSP4_anxious,
+                     DRSP5_moodswings,
+                     DRSP6_rejsens,
+                     DRSP7_angirr,
+                     DRSP8_intconflict, na.rm = TRUE))
+
+#the ROS (range of scale) is the MAX minus 1
+temp1 <- temp1 %>% mutate(ROS = DRSPmax -1)
+
+#create a perimenstrual mean and a midfollicular mean for each person
+temp2 <- etoh_daily_premen_v_midfol %>% filter(perimenstrual_count==1) %>% group_by(id) %>%
+  summarize(perimen_meanDRSP1 = mean(DRSP1_depblue, na.rm= TRUE),
+            perimen_meanDRSP2 = mean(DRSP2_hopeless, na.rm= TRUE),
+            perimen_meanDRSP3 = mean(DRSP3_worthguilt, na.rm= TRUE),
+            perimen_meanDRSP4 = mean(DRSP4_anxious, na.rm= TRUE),
+            perimen_meanDRSP5 = mean(DRSP5_moodswings, na.rm= TRUE),
+            perimen_meanDRSP6 = mean(DRSP6_rejsens, na.rm= TRUE),
+            perimen_meanDRSP7 = mean(DRSP7_angirr, na.rm= TRUE),
+            perimen_meanDRSP8 = mean(DRSP8_intconflict, na.rm= TRUE))
+
+temp3 <- etoh_daily_premen_v_midfol %>% filter(midfol_count==1) %>% group_by(id) %>%
+  summarize(midfol_meanDRSP1 = mean(DRSP1_depblue, na.rm= TRUE),
+            midfol_meanDRSP2 = mean(DRSP2_hopeless, na.rm= TRUE),
+            midfol_meanDRSP3 = mean(DRSP3_worthguilt, na.rm= TRUE),
+            midfol_meanDRSP4 = mean(DRSP4_anxious, na.rm= TRUE),
+            midfol_meanDRSP5 = mean(DRSP5_moodswings, na.rm= TRUE),
+            midfol_meanDRSP6 = mean(DRSP6_rejsens, na.rm= TRUE),
+            midfol_meanDRSP7 = mean(DRSP7_angirr, na.rm= TRUE),
+            midfol_meanDRSP8 = mean(DRSP8_intconflict, na.rm= TRUE))
+
+cyclicity <- left_join(temp1, temp2, by="id") %>%
+  left_join(., temp3, by="id") %>%
+  rowwise() %>%
+  mutate(DRSP1_cyc = ((perimen_meanDRSP1 - midfol_meanDRSP1)/ROS)*100,
+         DRSP2_cyc = ((perimen_meanDRSP2 - midfol_meanDRSP2)/ROS)*100,
+         DRSP3_cyc = ((perimen_meanDRSP3 - midfol_meanDRSP3)/ROS)*100,
+         DRSP4_cyc = ((perimen_meanDRSP4 - midfol_meanDRSP4)/ROS)*100,
+         DRSP5_cyc = ((perimen_meanDRSP5 - midfol_meanDRSP5)/ROS)*100,
+         DRSP6_cyc = ((perimen_meanDRSP6 - midfol_meanDRSP6)/ROS)*100,
+         DRSP7_cyc = ((perimen_meanDRSP7 - midfol_meanDRSP7)/ROS)*100,
+         DRSP8_cyc = ((perimen_meanDRSP8 - midfol_meanDRSP8)/ROS)*100)
+  
+plot(cyclicity$DRSP1_cyc) #depblue
+plot(cyclicity$DRSP2_cyc) #hopeless
+plot(cyclicity$DRSP3_cyc) #worthguilt
+plot(cyclicity$DRSP4_cyc) #anxious
+plot(cyclicity$DRSP5_cyc) #moodswings
+plot(cyclicity$DRSP6_cyc) #rejsens
+plot(cyclicity$DRSP7_cyc) #angirr
+plot(cyclicity$DRSP8_cyc) #intconflict
+
+hist(cyclicity$DRSP1_cyc)
+hist(cyclicity$DRSP2_cyc)
+hist(cyclicity$DRSP3_cyc)
+hist(cyclicity$DRSP4_cyc)
+hist(cyclicity$DRSP5_cyc)
+hist(cyclicity$DRSP6_cyc)
+hist(cyclicity$DRSP7_cyc)
+hist(cyclicity$DRSP8_cyc)
+
+
+##CREATE CATEGORICAL THRESHOLDS
+cyclicity <- cyclicity %>%
+  mutate(over30 = ifelse(any(DRSP1_cyc:DRSP8_cyc >= 30), 1, 0),
+         underneg30 = ifelse(any(DRSP1_cyc:DRSP8_cyc <= -30), 1, 0))
+
+#count of participants who had perimenstrual over midfollicular ratings > 30% change
+cyclicity %>%
+  group_by(over30) %>%
+  summarize(perimen_high = n())
+
+#count of participants who had midfollicular ratings over perimenstrual ratings > 30% change
+cyclicity %>%
+  group_by(underneg30) %>%
+  summarize(perimen_low = n())
+
+
+```
+## CREATE PERSON-LEVEL AVG CYCLICITY: CPASS THRESHOLDS
+-( average POSTmenstrual ratings MINUS average PREmenstrual ratings ) / range of scale * 100
+-range of scale is calculated based on the highest and lowest score they gave ANY DRSP item (example: if hopelessness is only ever rated 1-3, but anxiety goes 1-6, their range of scale is always 5)
+*premenstrual*  days (-7) to (-1)
+*postmenstrual* days (4) to (10)
+
+```{r}
+#create binary vars for premenstrual
+etoh_daily <- etoh_daily %>% mutate(CPASS_pre = ifelse(cycleday >= -7 & cycleday <= -1, 1, 0),
+                   CPASS_post = ifelse(cycleday >= 4 & cycleday <= 10, 1, 0))
+
+#check that nobody has <=3 pre or post menstrual days
+etoh_daily %>% group_by(id, CPASS_pre, CPASS_post) %>% 
+  filter(CPASS_pre==1 | CPASS_post==1) %>%
+  summarize(n=n()) %>% 
+  arrange(n)
+
+```
+
+
+```{r}
+
+cpasstemp1 <- etoh_daily %>% group_by(id) %>%
+  summarize(DRSPmin= min(DRSP1_depblue,
+                     DRSP2_hopeless,
+                     DRSP3_worthguilt,
+                     DRSP4_anxious,
+                     DRSP5_moodswings,
+                     DRSP6_rejsens,
+                     DRSP7_angirr,
+                     DRSP8_intconflict, na.rm = TRUE),
+            DRSPmax= max(DRSP1_depblue,
+                     DRSP2_hopeless,
+                     DRSP3_worthguilt,
+                     DRSP4_anxious,
+                     DRSP5_moodswings,
+                     DRSP6_rejsens,
+                     DRSP7_angirr,
+                     DRSP8_intconflict, na.rm = TRUE))
+
+cpasstemp1 <- cpasstemp1 %>% mutate(ROS = DRSPmax -1)
+
+
+#create a PREmenstrual mean and a POSTmenstrual mean for each person
+CPASS_pre <- etoh_daily %>% filter(CPASS_pre==1) %>% group_by(id) %>%
+  summarize(cpasspre_meanDRSP1 = mean(DRSP1_depblue, na.rm= TRUE),
+            cpasspre_meanDRSP2 = mean(DRSP2_hopeless, na.rm= TRUE),
+            cpasspre_meanDRSP3 = mean(DRSP3_worthguilt, na.rm= TRUE),
+            cpasspre_meanDRSP4 = mean(DRSP4_anxious, na.rm= TRUE),
+            cpasspre_meanDRSP5 = mean(DRSP5_moodswings, na.rm= TRUE),
+            cpasspre_meanDRSP6 = mean(DRSP6_rejsens, na.rm= TRUE),
+            cpasspre_meanDRSP7 = mean(DRSP7_angirr, na.rm= TRUE),
+            cpasspre_meanDRSP8 = mean(DRSP8_intconflict, na.rm= TRUE))
+
+CPASS_post <- etoh_daily %>% filter(CPASS_post==1) %>% group_by(id) %>%
+  summarize(cpasspost_meanDRSP1 = mean(DRSP1_depblue, na.rm= TRUE),
+            cpasspost_meanDRSP2 = mean(DRSP2_hopeless, na.rm= TRUE),
+            cpasspost_meanDRSP3 = mean(DRSP3_worthguilt, na.rm= TRUE),
+            cpasspost_meanDRSP4 = mean(DRSP4_anxious, na.rm= TRUE),
+            cpasspost_meanDRSP5 = mean(DRSP5_moodswings, na.rm= TRUE),
+            cpasspost_meanDRSP6 = mean(DRSP6_rejsens, na.rm= TRUE),
+            cpasspost_meanDRSP7 = mean(DRSP7_angirr, na.rm= TRUE),
+            cpasspost_meanDRSP8 = mean(DRSP8_intconflict, na.rm= TRUE))
+
+cpass_cyclicity <- left_join(cpasstemp1, CPASS_pre, by="id") %>%
+  left_join(., CPASS_post, by="id") %>%
+  rowwise() %>%
+  mutate(DRSP1_cpass = ((cpasspre_meanDRSP1 - cpasspost_meanDRSP1)/ROS)*100,
+         DRSP2_cpass = ((cpasspre_meanDRSP2 - cpasspost_meanDRSP2)/ROS)*100,
+         DRSP3_cpass = ((cpasspre_meanDRSP3 - cpasspost_meanDRSP3)/ROS)*100,
+         DRSP4_cpass = ((cpasspre_meanDRSP4 - cpasspost_meanDRSP4)/ROS)*100,
+         DRSP5_cpass = ((cpasspre_meanDRSP5 - cpasspost_meanDRSP5)/ROS)*100,
+         DRSP6_cpass = ((cpasspre_meanDRSP6 - cpasspost_meanDRSP6)/ROS)*100,
+         DRSP7_cpass = ((cpasspre_meanDRSP7 - cpasspost_meanDRSP7)/ROS)*100,
+         DRSP8_cpass = ((cpasspre_meanDRSP8 - cpasspost_meanDRSP8)/ROS)*100)
+  
+plot(cpass_cyclicity$DRSP1_cpass) #depblue
+plot(cpass_cyclicity$DRSP2_cpass) #hopeless
+plot(cpass_cyclicity$DRSP3_cpass) #worthguilt
+plot(cpass_cyclicity$DRSP4_cpass) #anxious
+plot(cpass_cyclicity$DRSP5_cpass) #moodswings
+plot(cpass_cyclicity$DRSP6_cpass) #rejsens
+plot(cpass_cyclicity$DRSP7_cpass) #angirr
+plot(cpass_cyclicity$DRSP8_cpass) #intconflict
+
+hist(cpass_cyclicity$DRSP1_cpass)
+hist(cpass_cyclicity$DRSP2_cpass)
+hist(cpass_cyclicity$DRSP3_cpass)
+hist(cpass_cyclicity$DRSP4_cpass)
+hist(cpass_cyclicity$DRSP5_cpass)
+hist(cpass_cyclicity$DRSP6_cpass)
+hist(cpass_cyclicity$DRSP7_cpass)
+hist(cpass_cyclicity$DRSP8_cpass)
+
+##CREATE CATEGORICAL THRESHOLDS
+cpass_cyclicity <- cpass_cyclicity %>% filter(id!=221) %>%
+  mutate(over30 = ifelse(any(DRSP1_cpass:DRSP8_cpass >= 30), 1, 0),
+         underneg30 = ifelse(any(DRSP1_cpass:DRSP8_cpass <= -30), 1, 0))
+
+#count of participants who had PREmenstrual over POSTmenstrual ratings > 30% change
+cpass_cyclicity %>%
+  group_by(over30) %>%
+  summarize(pre_high = n())
+
+#count of participants who had POSTmenstrual ratings over PREmenstrual ratings > 30% change
+cpass_cyclicity %>%
+  group_by(underneg30) %>%
+  summarize(pre_low = n())
+
+
+```
+

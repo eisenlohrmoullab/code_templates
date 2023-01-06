@@ -1,0 +1,150 @@
+---
+title: "Raincloud Plot Template Code"
+author: "Jordan Barone"
+date: '2022-06-24'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggdist)
+library(ggforce)
+```
+
+Code based on: https://www.cedricscherer.com/2021/06/06/visualizing-distributions-with-raincloud-plots-and-how-to-create-them-with-ggplot2/
+
+#Pull out your random effects by ID
+-for my models, I ran pairwise contrasts between cycle phases and rotated the reference group. I have 3 versions of each model to get all pairwise combinations of periovulatory-perimenstrual-midfollicular-midluteal.
+-model naming convention is modelX.Y.Z where
+--> *x=outcome*
+--> *y=model variation* (i.e., main effects only, interaction, with/without random effects - I tried several versions to get best convergence)
+--> *z=reference group*
+-so, to get all random effects for all pairwise comparisons of my main effects model with drinking as an outcome, I have to pull from 3 models with the same specifications, but rotating reference groups
+``` {r}
+#save out random effects and ID from your model
+RRdata_randomeffects1.1.ov <- as.data.frame(ranef(RR_model1.1.ov)[["id"]])
+#when the model is saved as a data frame, the IDs are assigned as the rownames - make ID a column
+RRdata_randomeffects1.1.ov <- cbind(id = rownames(RRdata_randomeffects1.1.ov), 
+                                    RRdata_randomeffects1.1.ov)
+#since you just removed the incorrect rownames, make the new rownames just a regular sequence
+rownames(RRdata_randomeffects1.1.ov) <- 1:nrow(RRdata_randomeffects1.1.ov)
+
+#repeat above steps with reference group #2
+RRdata_randomeffects1.1.mens <- as.data.frame(ranef(RR_model1.1.mens)[["id"]])
+RRdata_randomeffects1.1.mens <- cbind(id = rownames(RRdata_randomeffects1.1.mens), 
+                                      RRdata_randomeffects1.1.mens)
+rownames(RRdata_randomeffects1.1.mens) <- 1:nrow(RRdata_randomeffects1.1.mens)
+#repeat above steps with reference group #3
+RRdata_randomeffects1.1.lut <- as.data.frame(ranef(RR_model1.1.lut)[["id"]])
+RRdata_randomeffects1.1.lut <- cbind(id = rownames(RRdata_randomeffects1.1.lut), 
+                                      RRdata_randomeffects1.1.lut)
+rownames(RRdata_randomeffects1.1.lut) <- 1:nrow(RRdata_randomeffects1.1.lut)
+```
+
+#Step 2. Clean your random effects dataset
+```{r}
+#removing duplicates, renaming, adding fixed effects
+RRdata_randomeffects1.1.ov <- RRdata_randomeffects1.1.ov %>%
+  select(-c("(Intercept)")) %>% #remove the intercept column, I won't be using it
+  #rename the predictor variables to denote what their reference group is
+  rename(periov_v_midlut = LH_midluteal_count,
+         periov_v_perimens = LH_perimenstrual_count,
+         periov_v_midfol = LH_midfol_LH) %>%
+  #MANUALLY add the fixed effect from the model to each random effect as a new variable
+  mutate(periov_v_midfol_plusfixed = periov_v_midfol-0.09906,
+         periov_v_perimens_plusfixed = periov_v_perimens-0.14326,
+         periov_v_midlut_plusfixed = periov_v_midlut-0.23305)
+
+#repeat above with reference group #2
+#--> note here that the duplicate contrast we are removing is because already got "periov vs perimens" with periov as reference group, so we don't need "perimens vs periov"
+RRdata_randomeffects1.1.mens <- RRdata_randomeffects1.1.mens %>% 
+  select(-c(LH_periov_LH, "(Intercept)")) %>%
+  rename(perimens_v_midlut = LH_midluteal_count,
+         perimens_v_midfol = LH_midfol_LH) %>%
+  mutate(perimens_v_midlut_plusfixed = perimens_v_midlut+0.37630,
+         perimens_v_midfol_plusfixed = perimens_v_midfol+0.04419)
+
+#repeat above with reference group #3
+RRdata_randomeffects1.1.lut <- RRdata_randomeffects1.1.lut %>% 
+  select(-c(LH_perimenstrual_count, LH_periov_LH, "(Intercept)")) %>%
+  rename(midlut_v_midfol = LH_midfol_LH) %>%
+  mutate(midlut_v_midfol_plusfixed = midlut_v_midfol-0.33211)
+
+#merge to one random effect dataset
+#(I just learned that the function "reduce" can merge multiple data frames, but this code goes two at a time)
+RE1.1.ov.mens <- full_join(RRdata_randomeffects1.1.ov, RRdata_randomeffects1.1.mens, by="id")
+RE1.1.ov.mens.lut <- full_join(RE1.1.ov.mens, RRdata_randomeffects1.1.lut, by="id")
+```
+
+#Step 3. Plot code
+```{r}
+
+RRPLOT3_randomeffects_model1.1 <- RE1.1.ov.mens.lut %>%
+  #pivoting is necessary to get ALL random effects as one variable, rather than 6 columns
+  pivot_longer(
+    cols = ends_with("plusfixed"),
+    names_to = "pairwise",
+    values_to = "randomeffect") %>%
+  #aesthetics will be your new pivoted columns
+  ggplot(aes(x=pairwise, y=randomeffect, color=pairwise))+
+  #boxplot!
+  geom_boxplot(fill=NA,
+                width = 0.2,
+                outlier.color = NA)+
+  #half histogram1
+  ggdist::stat_halfeye(aes(fill=pairwise), 
+                       adjust = 0.5, width=0.6, justification=-0.3, .width = 0, point_colour=NA)+
+  #scatter!
+  geom_point(size=1,alpha=0.2, position = position_jitter(seed=1, width = 0.1))+
+  #everything from here down is just formatting and labeling
+  scale_color_discrete(guide="none")+
+  scale_fill_discrete(name="Cycle Phase Contrast",
+                      labels=c("MIDLUT vs MIDFOL",
+                               "PERIMENS vs MIDFOL",
+                               "PERIMENS vs MIDLUT",
+                               "PERIOV vs MIDFOL",
+                               "PERIOV vs MIDLUT",
+                               "PERIOV vs PERIMENS"))+
+  coord_cartesian(xlim=c(1.2, NA), clip = "off")+
+  theme_bw()+
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank())+
+  ylab("Random Slope")+
+  ggtitle("Random Effects",
+          subtitle = "individual differences of cycle phase on drinking probability")+
+  labs(fill="Cycle Phase Contrast")+
+  geom_hline(yintercept = 0, linetype="dashed", color="gray")+
+  geom_text(aes(x=1, y=-2.6), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="  (-)favors MIDLUT")+
+  geom_text(aes(x=1, y=1.5), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="    (+)favors MIDFOL")+
+  geom_text(aes(x=2, y=-1), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)favors PERIMENS")+
+  geom_text(aes(x=2, y=1), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)favors MIDFOL")+
+  geom_text(aes(x=3, y=-1.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)favors PERIMENS")+
+  geom_text(aes(x=3, y=2), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)favors MIDLUT")+
+  geom_text(aes(x=4, y=-0.75), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)favors PERIOV")+
+  geom_text(aes(x=4, y=0.5), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)favors MIDFOL")+
+  geom_text(aes(x=5, y=-2.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)favors PERIOV")+
+  geom_text(aes(x=5, y=2), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)favors MIDLUT")+
+  geom_text(aes(x=6, y=-1), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)favors PERIOV")+
+  geom_text(aes(x=6, y=0.75), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)favors PERIMENS")
+RRPLOT3_randomeffects_model1.1 %>% ggsave(filename = "2022-06-19 RR ranef_dd_pairwise.png", 
+                                                width = 9, height = 3,
+                                                path = "../04_writing/2022-04-26 ACER R&R/",
+                                                units = c("in"),
+                                                device = "png")
+```

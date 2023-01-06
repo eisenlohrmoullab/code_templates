@@ -1,0 +1,392 @@
+---
+title: "Trait for Analyses"
+author: "Jordan Barone"
+date: "5/25/2021"
+output: html_document
+---
+
+*these are just examples with some common trait variables! None of these are required for Table 1 or any descriptives*
+
+##view data
+```{r get descriptives, warning=FALSE}
+
+#describe() to get N's for each variable
+describe(clearALL_select, fast = TRUE, data = vars>1000)
+```
+
+#count and factor variables
+```{r}
+#summary stats for age
+clearALL_select %>% summarise(meanage=mean(age, na.rm=TRUE),
+                       sdage=sd(age, na.rm = TRUE),
+                       minage=min(age, na.rm = TRUE),
+                       maxage=max(age, na.rm = TRUE))
+
+#example to count n participants in a race group
+clearALL_select %>% count(race==1)
+
+#table of participants by race
+racesum <- clearALL_select %>% group_by(race) %>%
+  summarise(n=n())
+racesum$race <- factor(racesum$race, levels= c(1, 2, 3, 4, 7, 8, NA), labels = c("Caucasian", 
+                   "African American", 
+                   "Asian", 
+                   "American Indian", 
+                   "More than one race",
+                   "Decline to Answer"))
+kable(racesum)
+
+#ethnicity
+ethnicitysum <- clearALL_select %>% 
+  group_by(ethnicity, race) %>%
+  summarize (n=n())
+ethnicitysum$race <- factor(ethnicitysum$race, levels= c(1, 2, 3, 4, 7, 8, NA), labels = c("Caucasian", 
+                   "African American", 
+                   "Asian", 
+                   "American Indian", 
+                   "More than one race",
+                   "Decline to Answer"))
+ethnicitysum$ethnicity <- factor(ethnicitysum$ethnicity, levels = c(1, 2, 3),
+                                 labels = c("Hispanic", "Non-Hispanic", "Decline to Answer"))
+kable(ethnicitysum)
+
+```
+
+#various tables of factor labels
+```{r}
+#table of mean attempts
+attemptssum <- clearALL_select %>% summarise(n=n(),
+                       meanattempts=mean(numfullatt, na.rm=TRUE),
+                       meaninterrupted=mean(numintatt, na.rm = TRUE),
+                       meanaborted=mean(numabatt, na.rm = TRUE))
+kable(attemptssum, digits = 3)
+
+#table counting how many have ANY attempt vs none
+attemptYN <- clearALL_select %>% 
+  mutate(allattempts=rowSums(select(., ends_with("att")), na.rm = TRUE),
+         SBs = ifelse(allattempts>=1, "At Least One Attempt","No Hx of Attempt")) %>%
+  group_by(SBs) %>% summarize(n=n())
+
+#tables categorizing diagnoses
+SUDyn <- clearALL_select %>% mutate(anySUD=ifelse(lifetimedx_hxSUDalc!=0 |
+                   lifetimedx_hxSUDinh!=0 |
+                     lifetimedx_hxSUDMJ!=0 |
+                     lifetimedx_hxSUDopioid!=0 |
+                     lifetimedx_hxSUDother!=0 |
+                     lifetimedx_hxSUDothhall!=0 |
+                     lifetimedx_hxSUDsha!=0 |
+                     lifetimedx_hxSUDstim!=0 |
+                     lifetimedx_hxSUDPCP!=0, "Hx of SUD", "No SUD")) %>% 
+  select(., starts_with("lifetimedx_hxSUD"), anySUD) %>%
+  group_by(anySUD) %>% summarize(n=n())
+kable(anySUD)
+
+EDyn <- clearALL_select %>% mutate(anyED=ifelse(lifetimedx_hxAN!=0 |
+                   lifetimedx_hxBN!=0 |
+                     lifetimedx_hxBED!=0 |
+                     lifetimedx_hxothereat!=0,
+                   "Hx of ED", "No ED")) %>% select(.,
+                                                    lifetimedx_hxAN,
+                                                    lifetimedx_hxBN,
+                                                    lifetimedx_hxBED,
+                                                    lifetimedx_hxothereat,
+                                                    anyED) %>%
+  group_by(anyED) %>% summarize(n=n())
+kable(EDyn)
+
+hxTrauma <- clearALL_select %>% mutate(anyTrauma=ifelse(lifetimedx_hxPTSD!=0 |
+                                                   lifetimedx_hxothertrauma!=0 |
+                                                   traumainterview_sexab==1 |
+                                                   traumainterview_physab==1 |
+                                                   traumainterview_childphysab==1 |
+                                                   traumainterview_childsexab==1 |
+                                                   traumainterview_childothertrauma==1,
+                                                 "Hx of Trauma", "No Hx of Trauma")) %>%
+  group_by(anyTrauma) %>% summarize(n=n())
+kable(hxTrauma)
+
+# how many participants have a current depressive disorder?
+clearALL_select %>% group_by(currentdx_MDD, currentdx_PDD) %>% summarise(n=n())
+
+#how many participants have current GAD?
+clearALL_select %>% group_by(currentdx_GAD) %>% summarise(n=n())
+
+```
+
+
+#### Playing with tableone package
+
+```{r}
+
+library(tableone)
+
+#create list of continuous variables we want in demographic table
+contVars <- c("age", "ageatmenarche", "agefirstMDE", "numpregnancies", "number_children",
+              "numfullatt", "numintatt", "numabatt", "numhosp"
+              )
+
+#save race, education, ethnicity, marital status, and sexual orientation with factor labels (these are the variables that have more than 1 level)
+clearALL_select$maritalstatusf <- factor(clearALL_select$maritalstatus, levels = c(1,2,3,4,5),
+                                 labels = c("Currently Married",
+                                            "Widowed",
+                                            "Never Married",
+                                            "Separated or Divorced",
+                                            "Living with Partner"))
+
+clearALL_select$educationf <- factor(clearALL_select$education, levels = c(1,2,3,4,5,6,7,8),
+                             labels = c("0-4 grades",
+                                        "5-8 grades",
+                                        "some high school",
+                                        "graduated from high school",
+                                        "trade school or business college",
+                                        "some college (inc. completion of jr college)",
+                                        "grad. from 4-yr college",
+                                        "post-grad work at a university"))
+
+clearALL_select$sexorientationf <- factor(clearALL_select$sexorientation, levels = c(1,2,3,4),
+                                  labels = c("Homosexual(lesbian,gay)",
+                                             "Bisexual",
+                                             "Heterosexual",
+                                             "Other"))
+
+#create list of categorical variables we want in demographic table
+catVars <-c("race", "ethnicity", "education", "maritalstatus",
+            "sexorientation","genderorient", "everpregyn",
+            "lifetimedx_hxbipolar2",
+            "lifetimedx_hxMDD",
+            "lifetimedx_hxlifetimedx_hxhxPDD",
+            "lifetimedx_hxothDD",
+            "lifetimedx_hxSUDalc",
+            "lifetimedx_hxSUDsha",
+            "lifetimedx_hxSUDMJ",
+            "lifetimedx_hxSUDstim",
+            "lifetimedx_hxSUDopioid",
+            "lifetimedx_hxpanicDO",
+            "lifetimedx_hxagora",
+            "lifetimedx_hxSAD",
+            "lifetimedx_hxphobia",
+            "lifetimedx_hxGAD",
+            "lifetimedx_hxotheranx",
+            "lifetimedx_hxOCD",
+            "lifetimedx_hxAN",
+            "lifetimedx_hxBN",
+            "lifetimedx_hxBED",
+            "lifetimedx_hxothereat",
+            "lifetimedx_hxPTSD",
+            "lifetimedx_hxothertrauma",
+            "lifetimedx_hxotherDx",
+            "currentdx_MDD",
+            "currentdx_PDD",
+            "currentdx_PMDD",
+            "currentdx_othDD",
+            "currentdx_SUDalc",
+            "currentdx_SUDsha",
+            "currentdx_SUDmj",
+            "currentdx_SUDopioid",
+            "currentdx_PanicDO",
+            "currentdx_Agoraphobia",
+            "currentdx_SAD",
+            "currentdx_Phobi",
+            "currentdx_GAD",
+            "currentdx_OtherAnx",
+            "currentdx_OCD",
+            "currentdx_AN",
+            "currentdx_BN",
+            "currentdx_otheat",
+            "currentdx_ADHD",
+            "currentdx_PTSD",
+            "currentdx_Othertrauma",
+            "traumainterview_physab",
+            "traumainterview_childsexab",
+            "traumainterview_childothertrauma",
+            "traumainterview_physab.1",
+            "traumainterview_sexab"
+            )
+            
+#create full list of variables for table1
+allVars <- clearALL_select %>% select(c("age", "ageatmenarche", "agefirstMDE", "numpregnancies",
+                                 "number_children","numfullatt", "numintatt", "numabatt", "numhosp",
+                                 "race", "ethnicity", "education", "maritalstatus",
+                                 "sexorientation","genderorient", "everpregyn",
+            "lifetimedx_hxbipolar2",
+            "lifetimedx_hxMDD",
+            "lifetimedx_hxlifetimedx_hxhxPDD",
+            "lifetimedx_hxothDD",
+            "lifetimedx_hxSUDalc",
+            "lifetimedx_hxSUDsha",
+            "lifetimedx_hxSUDMJ",
+            "lifetimedx_hxSUDstim",
+            "lifetimedx_hxSUDopioid",
+            "lifetimedx_hxpanicDO",
+            "lifetimedx_hxagora",
+            "lifetimedx_hxSAD",
+            "lifetimedx_hxphobia",
+            "lifetimedx_hxGAD",
+            "lifetimedx_hxotheranx",
+            "lifetimedx_hxOCD",
+            "lifetimedx_hxAN",
+            "lifetimedx_hxBN",
+            "lifetimedx_hxBED",
+            "lifetimedx_hxothereat",
+            "lifetimedx_hxPTSD",
+            "lifetimedx_hxothertrauma",
+            "lifetimedx_hxotherDx",
+            "currentdx_MDD",
+            "currentdx_PDD",
+            "currentdx_PMDD",
+            "currentdx_othDD",
+            "currentdx_SUDalc",
+            "currentdx_SUDsha",
+            "currentdx_SUDmj",
+            "currentdx_SUDopioid",
+            "currentdx_PanicDO",
+            "currentdx_Agoraphobia",
+            "currentdx_SAD",
+            "currentdx_Phobi",
+            "currentdx_GAD",
+            "currentdx_OtherAnx",
+            "currentdx_OCD",
+            "currentdx_AN",
+            "currentdx_BN",
+            "currentdx_otheat",
+            "currentdx_ADHD",
+            "currentdx_PTSD",
+            "currentdx_Othertrauma",
+            "traumainterview_physab",
+            "traumainterview_childsexab",
+            "traumainterview_childothertrauma",
+            "traumainterview_physab.1",
+            "traumainterview_sexab"))
+
+
+#labeledvars <- ClearALL %>% select(c(educationf, sexorientationf, maritalstatusf))
+#CreateTableOne(data = ClearALL, vars = labeledvars)
+clearALL_select %>% group_by(maritalstatusf) %>% summarize(n=n())
+clearALL_select %>% group_by(sexorientationf) %>% summarize(n=n())
+clearALL_select %>% group_by(educationf) %>% summarize(n=n())
+
+
+```
+
+# viewing the TableOne package
+```{r}
+#full tableOne
+fulltbl1 <- CreateTableOne(data = allVars, factorVars = catVars)
+summary(fulltbl1$CatTable)
+summary(fulltbl1$ContTable)
+```
+
+### plot common trait variables
+```{r echo=FALSE}
+
+studysample.labs <- c("CLEAR1 (NC)", "CLEAR2 (Chicago)")
+names(studysample.labs) <- c("1", "2")
+
+#age histogram
+clearALL_select %>% ggplot(aes(x=age, fill=as_factor(studysample)))+
+  geom_histogram(binwidth = 5, position = "dodge")
+
+#age, by study
+clearALL_select %>% ggplot(aes(x=age, fill=as_factor(studysample)))+
+  geom_histogram(binwidth = 5, position = "dodge")+
+  facet_grid(.~studysample,labeller = labeller(studysample=studysample.labs))+
+  xlab("Age")
+
+#race, by clear1 and clear2
+clearALL_select %>% ggplot(aes(x=as_factor(race),
+                               fill=as_factor(race)))+
+  geom_bar()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none")+
+  facet_grid(.~studysample, labeller = labeller(studysample=studysample.labs))+
+  xlab("Race")+
+  labs(caption = "Race Breakdown by Study")
+
+#race, total
+clearALL_select %>% ggplot(aes(x=as_factor(race),
+                               fill=as_factor(race)))+
+  geom_bar()+
+  theme(axis.text.x.bottom = element_text(angle = 45, hjust = 1),
+        legend.position = "none")+
+  xlab("Race")
+
+#Marital status by study
+clearALL_select %>% ggplot(aes(x=as_factor(maritalstatus), 
+                               group=as_factor(studysample),
+                               fill=as_factor(maritalstatus)))+
+  geom_bar()+
+  facet_grid(.~studysample, labeller = labeller(studysample = studysample.labs))+
+  theme(axis.text.x.bottom = element_text(angle = 45, hjust = 1),
+        legend.position = "none")+
+  xlab("Marital Status")
+
+#marital status, total
+clearALL_select %>% ggplot(aes(x=as_factor(maritalstatus),
+                               fill=as_factor(maritalstatus)))+
+  geom_bar()+
+  theme(axis.text.x.bottom = element_text(angle = 45, hjust = 1),
+        legend.position = "none")+
+  xlab("Marital Status")
+
+#sexual orientation by study
+clearALL_select %>% ggplot(aes(x=as_factor(sexorientation), 
+                               group=as_factor(studysample),
+                               fill=as_factor(sexorientation)))+
+  geom_bar()+
+  facet_grid(.~studysample, labeller = labeller(studysample = studysample.labs))+
+  theme(axis.text.x.bottom = element_text(angle = 45, hjust = 1),
+        legend.position = "none")+
+  xlab("Sexual Orientation")
+
+#sexual orientation, total
+clearALL_select %>% ggplot(aes(x=as_factor(sexorientation),
+                               fill=as_factor(sexorientation)))+
+  geom_bar()+
+  theme(axis.text.x.bottom = element_text(angle = 45, hjust = 1),
+        legend.position = "none")+
+  xlab("Sexual Orientation")
+
+#education by study
+clearALL_select %>% ggplot(aes(x=as_factor(education), 
+                               group=as_factor(studysample),
+                               fill=as_factor(education)))+
+  geom_bar()+
+  facet_grid(.~studysample, labeller = labeller(studysample = studysample.labs))+
+  theme(axis.text.x.bottom = element_text(angle = 45, hjust = 1),
+        legend.position = "none")+
+  xlab("Education")
+
+#education, total
+clearALL_select %>% ggplot(aes(x=as_factor(education), fill=as_factor(education)))+
+  geom_bar()+
+  theme(axis.text.x.bottom = element_text(angle = 45, hjust = 1),
+        legend.position = "none")+
+  xlab("Education")
+
+#hx of trauma
+clearALL_select %>% mutate(anyTrauma=ifelse(lifetimedx_hxPTSD!=0 |
+                                                   lifetimedx_hxothertrauma!=0 |
+                                                   traumainterview_sexab==1 |
+                                                   traumainterview_physab==1 |
+                                                   traumainterview_childphysab==1 |
+                                                   traumainterview_childsexab==1 |
+                                                   traumainterview_childothertrauma==1,
+                                                 "Hx of Trauma", "No Hx of Trauma")) %>%
+  ggplot(aes(x=anyTrauma, fill=anyTrauma))+
+  geom_histogram(stat = "count")
+
+clearALL_select %>% mutate(anySUD=ifelse(lifetimedx_hxSUDalc!=0 |
+                   lifetimedx_hxSUDinh!=0 |
+                     lifetimedx_hxSUDMJ!=0 |
+                     lifetimedx_hxSUDopioid!=0 |
+                     lifetimedx_hxSUDother!=0 |
+                     lifetimedx_hxSUDothhall!=0 |
+                     lifetimedx_hxSUDsha!=0 |
+                     lifetimedx_hxSUDstim!=0 |
+                     lifetimedx_hxSUDPCP!=0, "Hx of SUD", "No SUD")) %>% 
+  select(., starts_with("lifetimedx_hxSUD"), anySUD) %>%
+  ggplot(aes(x=anySUD, fill=anySUD))+
+  geom_histogram(stat = "count")
+
+```
+

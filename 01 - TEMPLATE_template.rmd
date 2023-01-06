@@ -1,0 +1,61 @@
+---
+title: "TEMPLATE Template"
+author: "Anisha Nagpal"
+date: "2022-09-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import Data
+
+Use this first code chunk below to import your libraries, set your working directory (file path where you would like to save your output), import your data, and subset your data. The libraries included below are some commonly useful libraries. Using hashtags to add headers to your RMarkdown (outside of code chunks) is helpful for people using your file to navigate the file using the outline bar in Rstudio. Also you can label all of your code chunks to help with file navigation. Here is a cheatsheet for RMarkdown: https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf
+
+```{r libraries and data import}
+library(haven) #for reading files, especially useful for importing SPSS files 
+library(ggplot2) #for plotting
+library(tidyverse) #for data management and manipulation
+
+
+#setwd("")
+
+#read_csv() #using haven, you can also use read.csv() in base R
+
+#make sure using csv with correct sub-sample 
+
+
+```
+
+## Include your analytic code 
+
+Throughout your code chunks, comment heavily so people can follow your code easily. Longer interpretations and explanations can also be written outside of your code chunks. 
+
+```{r cars}
+#summary(cars)
+#just a silly function as an example of analytic code 
+```
+
+## Saving your template
+
+* clean_
+  + Use for templates related to screening the data for ERRORS and data integrity issues (e.g., duplicates, trial data entries, etc)
+* prep_
+  + Use for templates related to prepping data variables -- cycle phase, cycle day, creating new study variables related to phase in study, etc
+* score_
+  + Use for templates related to scoring self-report and behavioral measures
+* plot_
+  + Use for templates related to creating images and figures
+* model_
+  + Use for templates related to building and testing statistical models.
+
+
+
+
+
+
+
+
+ 
+

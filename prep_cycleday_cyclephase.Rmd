@@ -1,0 +1,96 @@
+---
+title: "CYCLE variables"
+author: "Jordan Barone"
+date: "2022-09-02"
+output: html_document
+---
+
+*NOTE: it is absolutely essential that date duplicates are cleaned before adding cycle variables.*
+
+# add cycle day
+```{r cycleday}
+#if menstrualbleeding = 0.5 (spotting) or 1 (bleeding) and firstdayofperiod = 1, then cycleday = 1
+Clear2DailyData$cycleday <- ifelse(Clear2DailyData$menstrualbleeding >= 0.5 & Clear2DailyData$firstdayofperiod == 1, 1, 0)
+#convert all NAs in cycleday to 0
+Clear2DailyData$cycleday[is.na(Clear2DailyData$cycleday)] <- 0
+
+#Fill in missing days by ID 
+Clear2DailyData <- Clear2DailyData[!is.na(Clear2DailyData$daterated), ]
+Clear2DailyData <- Clear2DailyData %>% group_by(id) %>%
+  complete(daterated = seq.Date(min(daterated), max(daterated), by = "day"))
+Clear2DailyData <- cbind(Clear2DailyData, 
+                         year = year(Clear2DailyData$daterated), 
+                         month = month(Clear2DailyData$daterated), 
+                         day = day(Clear2DailyData$daterated)) 
+Clear2DailyData <- Clear2DailyData[with(Clear2DailyData,order(as.numeric(id), 
+                                                              year, month, day, daterated), cycleday),]
+Clear2DailyData$cycleday[is.na(Clear2DailyData$cycleday)] <- 0
+
+Clear2DailyData <- Clear2DailyData[with(Clear2DailyData,order(id, 
+                                                              year, 
+                                                              month, 
+                                                              day, 
+                                                              daterated),cycleday),]
+
+#make A the variable where menstrualbleeding starts AND period starts
+Clear2DailyData$A <- Clear2DailyData$cycleday
+
+cycleCount <- function(x) {
+  #Get the index of 1
+  inds <- which(x == 1)
+  if(!length(inds)) return(0) 
+  #Create a sequence with that index as 0
+  num <- lapply(inds, function(i) {
+    num <- seq_along(x) - i
+    #Add 1 to values greater than equal to 0
+    num[num >= 0] <- num[num >= 0] + 1
+    num[num < -15 | num > 10] <- NA #jb changed days here 8/24/21
+    num
+  })
+  #Select the first non-NA values from the sequence
+  do.call(coalesce, num)
+}
+
+Clear2DailyData <- Clear2DailyData %>% group_by(id) %>% 
+  mutate(cycleday = cycleCount(A))
+
+Clear2DailyData <- Clear2DailyData %>% select(!A)
+```
+
+#ways to view and check that the cycle day code looks right
+```{r}
+
+#View in a separate window and manually scroll through
+Clear2DailyData %>% select(id, daterated, firstdayofperiod, cycleday, posLHtoday, cycleday) %>% View()
+
+#how many observations do you have for each cycle day?
+Clear2DailyData %>% group_by(cycleday) %>% summarize(n=n())
+
+#do you have any observations that got assigned a cycle day of 0? this is wrong, and you should check who that happened for
+Clear2DailyData %>% filter(cycleday==0) %>% pull(id)
+
+
+```
+
+### add cycle phase
+ - goal is to have 4 dummy code variables with 0, 1, and NA for each of 4 phases
+ - for ref, RAW clear1 has this code: 1=fol, 2=ov, 3=midlut, 4=PREmenstrual [this will be removed]
+ - for future *visualizing*, it is also helpful to have one variable with all of the phases - this will NOT BE USED for analysis
+```{r}
+##ADD cycle phase based on "how to study" paper
+
+Clear2DailyData <- Clear2DailyData %>% 
+  mutate(midluteal_count = ifelse(cycleday >= -9 & cycleday <= -5, 1, 0),
+         perimenstrual_count = ifelse(cycleday >=-3 & cycleday <=2, 1, 0),
+         midfol_count = ifelse(cycleday >=4 & cycleday <=7, 1, 0),
+         periov_count = ifelse(cycleday >= -15 & cycleday <= -12, 1, 0))
+
+#add a non-dummy coded variable with all of cycle phase info above, which will be useful for future visualizations and summaries
+Clear2DailyData <- Clear2DailyData %>% mutate(cyclephase = case_when(periov_count==1 ~ 1,
+                                                     midluteal_count==1 ~ 2,
+                                                     perimenstrual_count==1 ~ 3,
+                                                     midfol_count==1 ~ 4,
+                                                     TRUE ~ as.numeric(NA)))
+
+```
+

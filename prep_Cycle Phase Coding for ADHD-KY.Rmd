@@ -1,0 +1,308 @@
+---
+title: "2022-07-12 Cycle Phase Coding for KY-ADHD"
+author: "Jordan Barone"
+date: '2022-07-12'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Step 1: packages, working directory, import data
+```{r setup}
+
+#libraries: not all of these will be used in this script, but this list is pretty exhaustive for data cleaning
+library(haven) #for reading files
+library(ggplot2) #for plotting
+library(tidyverse) #for data management and manipulation
+library(zoo) #for rolling averages
+library(janitor) #nice cleaning functions
+library(psych) #good describe/summary functions
+library(visdat) #visualize data
+library(skimr) #useful skimming functions for big datasets
+library(lubridate) #for manipulating dates
+library(readxl) #if you are importing an excel with multiple sheets
+
+#set your working directory (this is where the code and any output will get saved)
+setwd("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_DAILY/02_data_prep_workspace/")
+
+#import your file
+#recommended for CLEAR Lab: use SPSS file format downloaded from qualtrics - this allows us to preserve label options and values with nice formatting
+Clear2DailyData <- read_spss("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_DAILY/01_raw_data/2022-04-15 clear2daily raw.sav")
+
+```
+
+
+#Step 2: basic data review - make notes of what might need upstream or in-code cleaning
+**skim function**: check that id and daterated have NO missing values
+  - absolutely necessary to not have missing ID or DATES for the cycle day sequence code to be accurate!!!
+  - note on skim: it can't read labelled doubles (aka the type of variable SPSS contains, with labels embedded), so it will think everything is a character - not a problem
+```{r review your dataset}
+
+## get overview of data ## 
+glimpse(Clear2DailyData) %>% summarize() #get a row value, column value, variable type, and see the first few values of each variable
+skim(Clear2DailyData) %>% View() #i like View when the df will be bigger than my console screen; this is a good function to check basic missingness, mins and maxs, etc
+
+#visualize the types of variables included in your dataset, review any that seem miscoded
+vis_dat(Clear2DailyData, warn_large_data = FALSE)
+#visualize missing data, pay specific attention to any missing ID or date
+vis_miss(Clear2DailyData, warn_large_data = FALSE)
+
+#number of rows
+dim(Clear2DailyData) [1]
+#number of columns
+dim(Clear2DailyData) [2]
+
+#number of participants
+length(unique(Clear2DailyData$id))
+
+
+```
+
+
+#Step 3: basic data cleaning
+**date formatting**: the specific function you use will depend on how participants entered the date into the survey. This script uses mdy() to take data that was entered as mm/dd/yyyy and force it into a date-format. Will vary if data entry was different, look into "lubridate" package for more info.
+```{r clean dataset}
+
+#remove any entirely empty rows or columns
+Clear2DailyData <- Clear2DailyData %>% remove_empty()
+
+#check ID
+str(Clear2DailyData$id) #see variables and labeled options
+#make sure ID is formatted as a numeric variable
+Clear2DailyData$id <- as.numeric(Clear2DailyData$id)
+#make sure no "empty" rows got included - for our purposes, this would be any row that doesnt have an ID entered
+Clear2DailyData <- Clear2DailyData %>%
+  filter(!is.na(id))
+
+#check date
+str(Clear2DailyData$daterated)
+#format all CLEAR2 dates as R-readable dates (mdy function lubridate package)
+Clear2DailyData$daterated <- mdy(Clear2DailyData$daterated)
+
+Clear2DailyData <- Clear2DailyData %>%
+  filter(!is.na(id))
+
+```
+
+
+### step 4a: add cycleday, based on menses onset (menses onset = day 1)
+```{r cycleday}
+
+#if menstrualbleeding = 0.5 (spotting) or 1 (bleeding) and firstdayofperiod = 1, then cycleday = 1
+Clear2DailyData$cycleday <- ifelse(Clear2DailyData$menstrualbleeding >= 0.5 
+                                   & Clear2DailyData$firstdayofperiod == 1, 1, 0)
+#convert all NAs in cycleday to 0
+Clear2DailyData$cycleday[is.na(Clear2DailyData$cycleday)] <- 0
+
+#Fill in missing days by ID 
+Clear2DailyData <- Clear2DailyData[!is.na(Clear2DailyData$daterated), ]
+Clear2DailyData <- Clear2DailyData %>% group_by(id) %>%
+  complete(daterated = seq.Date(min(daterated), max(daterated), by = "day"))
+Clear2DailyData <- cbind(Clear2DailyData, 
+                         year = year(Clear2DailyData$daterated), 
+                         month = month(Clear2DailyData$daterated), 
+                         day = day(Clear2DailyData$daterated)) 
+Clear2DailyData <- Clear2DailyData[with(Clear2DailyData,order(as.numeric(id), 
+                                                              year, month, day, daterated), cycleday),]
+Clear2DailyData$cycleday[is.na(Clear2DailyData$cycleday)] <- 0
+
+Clear2DailyData <- Clear2DailyData[with(Clear2DailyData,order(id, 
+                                                              year, 
+                                                              month, 
+                                                              day, 
+                                                              daterated),cycleday),]
+
+#make A the variable where menstrualbleeding starts AND period starts
+Clear2DailyData$A <- Clear2DailyData$cycleday
+
+cycleCount <- function(x) {
+  #Get the index of 1
+  inds <- which(x == 1)
+  if(!length(inds)) return(0) 
+  #Create a sequence with that index as 0
+  num <- lapply(inds, function(i) {
+    num <- seq_along(x) - i
+    #Add 1 to values greater than equal to 0
+    num[num >= 0] <- num[num >= 0] + 1
+    num[num < -15 | num > 10] <- NA 
+    num
+  })
+  #Select the first non-NA values from the sequence
+  do.call(coalesce, num)
+}
+
+Clear2DailyData <- Clear2DailyData %>% group_by(id) %>% 
+  mutate(cycleday = cycleCount(A))
+Clear2DailyData <- Clear2DailyData %>% select(!A)
+
+```
+
+#review step 4a: 
+```{r cycleday checking}
+
+#how many daily ratings got assigned each cycle day?
+Clear2DailyData %>% group_by(cycleday) %>% summarize(n=n())
+
+#did any cycledays get assigned 0? this would only occur if the person never reported menses
+#flag this ID for review and fix prior to adding phasing
+Clear2DailyData %>% filter(cycleday==0) %>% pull(id)
+```
+
+#step 4b: make daycountLH, based on positive LH test (LH test day = 0)
+```{r daycountLH}
+#make A a new temp column where pt received pos ov test
+Clear2DailyData$A <- Clear2DailyData$posLHtoday
+
+#FUNCTION for calculating the sequence
+LHCount <- function(x) {
+  #Get the index of 1
+  inds <- which(x == 1)
+  if(!length(inds)) return(0) 
+  #Create a sequence with that index as 0
+  num <- lapply(inds, function(i) {
+    num <- seq_along(x) - i
+    num[num < -7 | num > 15] <- NA 
+    num
+  })
+  #Select the first non-NA values from the sequence
+  do.call(coalesce, num)
+}
+
+#run the LHCount function and save it as as a new column called daycountLH
+Clear2DailyData<- Clear2DailyData %>% group_by(id) %>% 
+  mutate(daycountLH = LHCount(A))
+#remove the temp column A
+Clear2DailyData <- Clear2DailyData %>% select(!A)
+```
+
+#review step 4b:
+```{r daycountLH checking}
+
+#how many daily ratings got assigned each cycle day?
+Clear2DailyData %>% group_by(daycountLH) %>% summarize(n=n())
+
+```
+
+#step 5a: cycle phase based on menses count:
+reminder: dummy code comes from Schmalenberger 2021 appendix
+```{r cyclephase_count}
+
+Clear2DailyData <- Clear2DailyData %>% 
+  mutate(midluteal_count = ifelse(cycleday >= -9 & cycleday <= -5, 1, 0),
+         perimenstrual_count = ifelse(cycleday >=-3 & cycleday <=2, 1, 0),
+         midfol_count = ifelse(cycleday >=4 & cycleday <=7, 1, 0),
+         periov_count = ifelse(cycleday >= -15 & cycleday <= -12, 1, 0))
+
+#add a non-dummy coded variable with all of cycle phase info above, which will be useful for future visualizations and summaries
+Clear2DailyData <- Clear2DailyData %>% mutate(cyclephase_count = case_when(periov_count==1 ~ 1,
+                                                     midluteal_count==1 ~ 2,
+                                                     perimenstrual_count==1 ~ 3,
+                                                     midfol_count==1 ~ 4,
+                                                     TRUE ~ as.numeric(NA)))
+
+```
+
+#step 5b: cycle phase based on LH count:
+-note: the perimenstrual phase is still coded based on menses count variable, but for the purpose of keeping the dummy code labeling clear, we name it *perimenstrual_LH* to indicate that this variable gets included in the dummy code set of LH-based phasing
+-again, all of this information is from Schmalenberger 2021 appendix
+```{r cyclephase_LH}
+
+Clear2DailyData <- Clear2DailyData %>% 
+  mutate(midluteal_LH = ifelse(daycountLH >= 6 & daycountLH <= 10, 1, 0),
+         perimenstrual_LH = ifelse(cycleday >=-3 & cycleday <=2, 1, 0), #note perimenstrual is based on cycleday
+         midfol_LH = ifelse(daycountLH >=-7 & daycountLH <=-3, 1, 0),
+         periov_LH = ifelse(daycountLH >= -2 & daycountLH <= 1, 1, 0))
+
+#fill out the dummy code, so that if any phase is 1, all others should be 0 (not NA)
+Clear2DailyData <- Clear2DailyData %>%
+  rowwise() %>%
+  mutate(sumdummy = sum(midfol_LH,
+                        periov_LH,
+                        perimenstrual_LH,
+                        midluteal_LH, na.rm = T)) %>% 
+  #if all phases=0, make the midluteal_LH variable NA instead of 0,
+  #if perimenstrual by menses count = 1, change midluteal_LH to 0 instead of NA to fill out structural set,
+  #otherwise, keep as is
+  mutate(midluteal_LH = case_when(sumdummy==0 ~ as.numeric(NA),
+                                  sumdummy==1 & perimenstrual_LH==1 ~ 0,
+                                  TRUE ~ midluteal_LH), 
+         #same for midfol
+         midfol_LH = case_when(sumdummy==0 ~ as.numeric(NA),
+                               sumdummy==1 & perimenstrual_LH==1 ~ 0,
+                               TRUE ~ midfol_LH), 
+          #same for periov
+         periov_LH = case_when(sumdummy==0 ~ as.numeric(NA),
+                               sumdummy==1 & perimenstrual_LH==1 ~ 0,
+                               TRUE ~ periov_LH),
+         #if any other phase is 1, fill out perimenstrual to be 0
+         perimenstrual_LH = case_when(sumdummy==0 ~ as.numeric(NA), 
+                                        sumdummy==1 & midfol_LH==1 ~ 0,
+                                        sumdummy==1 & periov_LH==1 ~ 0,
+                                        sumdummy==1 & midluteal_LH==1 ~ 0
+                                        TRUE ~ perimenstrual_LH))
+
+#add a non-dummy coded variable with all of cycle phase info above, which will be useful for future visualizations and summaries
+Clear2DailyData <- Clear2DailyData %>% mutate(cyclephase_LH = case_when(periov_LH==1 ~ 1,
+                                                     midluteal_LH==1 ~ 2,
+                                                     perimenstrual_LH==1 ~ 3,
+                                                     midfol_LH==1 ~ 4,
+                                                     TRUE ~ as.numeric(NA)))
+
+```
+
+#step 6: review for any days that got double-counted
+-when using LH-based phasing for all 4 phases, the most likely possibility for overlap is a day that got labeled midfollicular by LH-count and perimenstrual by menses count. *Perimenstrual_count trumps midfollicular by LH count* in this instance.
+-any other overlaps within the dummy code are likely miscoded or an abnormal cycle.
+```{r}
+
+#check overlaps: goal is to only have 5 possible group combinations here (1 row per dummy coded phase, then a row where ALL are NA)
+Clear2DailyData %>%
+  group_by(periov_LH, midluteal_LH, perimenstrual_LH, midfol_LH) %>%
+  summarize(n=n())
+#make note of errors
+
+
+#example code to review midfol_LH and perimenstrual_LH overlaps, if they exist
+Clear2DailyData %>%
+  filter(midfol_LH==1) %>%
+  filter(perimenstrual_LH==1) %>%
+  select(id, daterated, posLHtoday, daycountLH,
+         menstrualbleeding,
+         firstdayofperiod, cycleday,
+         LH_midfol_LH, LH_periov_LH,
+         LH_midluteal_count, LH_perimenstrual_count, cleartrialphase) %>%
+  View()
+#in CLEAR studies, we are looking to see if the day in question is at the early end of the follicular phase as estimated by counting the days prior to ovulation
+#example: if the day in question is -7 by LH count and +2 by menses count, this was a short follicular phase, and is probably OK to be included, but needs to be recoded as "perimenstrual" (see below)
+
+
+```
+
+#step 7: edit days that got double-counted
+```{r}
+
+Clear2DailyData  <- Clear2DailyData  %>%
+  #if perimenstrual by firstdayofperiod and midfol by pre-LH count are both 1, perimen wins, make midfol=0
+  mutate(midfol_LH = case_when(perimenstrual_LH==1 ~ 0,
+                                        TRUE ~ midfol_LH)) 
+
+#good practice to review again and ensure that dummy code is fixed
+Clear2DailyData %>%
+  group_by(periov_LH, midluteal_LH, perimenstrual_LH, midfol_LH) %>%
+  summarize(n=n())
+
+```
+
+#optional step 8: save dataset 
+```{r}
+
+Clear2DailyData %>% write_sav("2022-07-12 DATASET with cycle coding.sav")
+#or#
+Clear2DailyData %>% write.csv("2022-07-12 DATASET with cycle coding.csv")
+
+```
+
+
+

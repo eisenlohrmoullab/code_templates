@@ -1,0 +1,271 @@
+---
+title: "Untitled"
+author: "Jordan Barone"
+date: "5/12/2022"
+output: html_document
+---
+
+*Rules before using this template*
+- make sure all data has been cleaned, ESPECIALLY date cleaning and removing date duplicates
+- make sure dummy rows have already been inserted on missing days
+- cycleday based on menses count alone must be completed already
+- phase-meds-tx tracking sheet must be cleaned and merged into your daily dataset
+
+#override the participant report of positive ovulation from qualtrics with our manual, staff-entered ovulation from phase-meds-tx tracking
+```{r}
+
+#select the BEST lh variable for merging
+c2daily <- c2daily %>% select(-posLHtoday) #removes the qualtrics version of the variable
+c2daily <- c2daily %>% 
+  rename(posLHtoday = posovtest) #renames the staff-entered variable to be "posLHtoday" bc that matches other codes (not a required step, but jb did this for merging with clear1, relevant for alcohol paper)
+```
+
+#some quick descriptives before diving in
+```{r}
+
+#participants who have at least 1 positive ov test
+c2daily %>% group_by(id) %>% 
+  filter(posLHtoday==1) %>% 
+  summarize(n=n())
+
+#make list of IDs with LH-confirmed ovulatory cycles
+c2_LHids <- c2daily %>%
+  filter(posLHtoday==1) %>% 
+  group_by(id) %>%
+  distinct(id) %>%
+  select(id) %>%
+  as.matrix() %>%
+  c()
+
+#can plug in any variable of interest here to find out how many participants in the LH-confirmed sample also met another criteria
+#example: how many people in the LH-confirmed sample also had at least one instance of binge drinking?
+c2daily %>% 
+  filter(id %in% c2_LHids) %>%
+  group_by(id, binge_today) %>%
+  summarize(n=n()) %>%
+  filter(binge_today==1)
+
+#filter your group of just people with confirmed LH ovulation
+c2daily_LHsample <- c2daily %>%
+  filter(id %in% c2_LHids)
+
+```
+
+#create daycountLH: count from -7 to +10 surrounding ovulation as day 0
+```{r}
+
+#make A a new temp column where pt received pos ov test
+c2daily_LHsample$A <- c2daily_LHsample$posLHtoday
+
+#FUNCTION for calculating the sequence
+LHCount <- function(x) {
+  #Get the index of 1
+  inds <- which(x == 1)
+  if(!length(inds)) return(0) 
+  #Create a sequence with that index as 0
+  num <- lapply(inds, function(i) {
+    num <- seq_along(x) - i
+    num[num < -7 | num > 15] <- NA 
+    num
+  })
+  #Select the first non-NA values from the sequence
+  do.call(coalesce, num)
+}
+
+#run the LHCount function and save it as as a new column called daycountLH
+c2daily_LHsample <- c2daily_LHsample %>% group_by(id) %>% 
+  mutate(daycountLH = LHCount(A))
+#remove the temp column A
+c2daily_LHsample <- c2daily_LHsample %>% select(!A)
+
+```
+
+
+#create LH-based cycle phase, FOR BASELINE DAYS ONLY
+***this process is different if you are including the experimental days***
+The experimental condition starts at day +7. Using LH-surge methods, the midluteal phase would fall on days +6 to +10. Days +7 to +10 need to be excluded from any baseline-only papers (Barone Alcohol Paper, Ross SUI Mediators Paper). That gives us a max luteal phase of 1 day only - so we will use the backward count method for midluteal phase. cycleday (-15 to +10) and counting-based cycle phases (see HTSMC appendix) are already saved in the dataset that was imported.
+*JBs naming conventions:* 
+--> LHgroup_ prefix to indicate this counting system  (structural set of dummy codes, added LHgroup_ prefix per Katja paper) only applies to the sample with at least 1 confirmed ovulation
+--> _LH/_count suffix to indicate if this phase is getting coded by its relation to LH-surge, or its relation to menses onset
+*Rules:*
+LHgroup_midfol_LH = day -7 to -3 before posLHtoday
+LHgroup_periov_LH = day -2 to +1 surrounding posLHtoday
+LHgroup_midluteal_count = day -9 to -5 before mensesonset
+LHgroup_perimenstrual_count = day -3 to +2 surrounding menses onset
+
+```{r}
+
+#create midfol and periov phases via LH method, and copy midlut and perimens from counting methods
+c2daily_LHsample <- c2daily_LHsample %>%
+  group_by(id) %>%
+  mutate(LHgroup_midfol_LH = ifelse(daycountLH>=-7 & daycountLH<=-3, 1, 0),
+         LHgroup_periov_LH = ifelse(daycountLH>=-2 & daycountLH<=1, 1, 0),
+         LHgroup_earlylut_LH = ifelse(daycountLH>=2 & daycountLH<=5, 1, 0), #added early lut
+         LHgroup_midluteal_count = ifelse(midluteal_count==1, 1, 0),
+         LHgroup_perimenstrual_count = ifelse(perimenstrual_count==1, 1, 0))
+
+
+c2daily_LHsample <- c2daily_LHsample %>%
+  rowwise() %>%
+  mutate(sumdummy = sum(LHgroup_midfol_LH,
+                        LHgroup_periov_LH,
+                        LHgroup_perimenstrual_count,
+                        LHgroup_midluteal_count, na.rm = T)) %>% 
+  #if all phases=0, make the midluteal_LH variable NA instead of 0,
+  #if either of the count variables are a 1, change midluteal_LH to 0 instead of NA to fill out structural set,
+  #otherwise, keep as is
+  mutate(LHgroup_midluteal_count = case_when(sumdummy==0 ~ as.numeric(NA), 
+                                        sumdummy==1 & LHgroup_midfol_LH==1 ~ 0,
+                                        sumdummy==1 & LHgroup_periov_LH==1 ~ 0,
+                                        TRUE ~ LHgroup_midluteal_count), 
+         #same for midfol
+         LHgroup_midfol_LH = case_when(sumdummy==0 ~ as.numeric(NA), 
+                                  sumdummy==1 & LHgroup_perimenstrual_count==1 ~ 0,
+                                  sumdummy==1 & LHgroup_midluteal_count==1 ~ 0,
+                                  TRUE ~ LHgroup_midfol_LH), 
+          #same for periov
+         LHgroup_periov_LH = case_when(sumdummy==0 ~ as.numeric(NA), 
+                                  sumdummy==1 & LHgroup_perimenstrual_count==1 ~ 0,
+                                  sumdummy==1 & LHgroup_midluteal_count==1 ~ 0,
+                                  TRUE ~ LHgroup_periov_LH),
+         #same for perimen
+         LHgroup_perimenstrual_count = case_when(sumdummy==0 ~ as.numeric(NA), 
+                                        sumdummy==1 & LHgroup_midfol_LH==1 ~ 0,
+                                        sumdummy==1 & LHgroup_periov_LH==1 ~ 0,
+                                        TRUE ~ LHgroup_perimenstrual_count))
+```
+
+#review
+```{r}
+#check overlap
+c2daily_LHsample %>%
+  group_by(LHgroup_periov_LH, LHgroup_midluteal_count, LHgroup_perimenstrual_count,LHgroup_midfol_LH) %>%
+  summarize(n=n())
+
+#review counting and phasing
+c2daily_LHsample %>%
+  select(id, daterated, posLHtoday, daycountLH,
+         LHgroup_midfol_LH, LHgroup_periov_LH,
+         firstdayofperiod, cycleday,
+         LHgroup_midluteal_count, LHgroup_perimenstrual_count) %>%
+  View()
+
+```
+
+#IF you want to save and review bin excel or separately
+```{r}
+
+c2daily_LHsample %>%
+  select(id, daterated, posLHtoday, daycountLH,
+         LHgroup_midfol_LH, LHgroup_periov_LH,
+         firstdayofperiod, cycleday,
+         LHgroup_midluteal_count, LHgroup_perimenstrual_count) %>%
+  write_csv("2022-05-15 LH and MensesOnset Counting and Phasing.csv")
+
+```
+
+
+#review counting and phasing where there are OVERLAPS
+```{r}
+
+#periov and perimenstrual overlaps: n=3
+c2daily_LHsample %>%
+  filter(LHgroup_periov_LH==1) %>%
+  filter(LHgroup_perimenstrual_count==1) %>%
+  select(id, daterated, posLHtoday, daycountLH,
+         menstrualbleeding,
+         firstdayofperiod, cycleday,
+         LHgroup_midfol_LH, LHgroup_periov_LH,
+         LHgroup_midluteal_count, LHgroup_perimenstrual_count, cleartrialphase) %>%
+  View()
+
+#periov and midluteal overlaps: n=16
+c2daily_LHsample %>%
+  filter(LHgroup_midfol_LH==1) %>%
+  filter(LHgroup_midluteal_count==1) %>%
+  select(id, daterated, posLHtoday, daycountLH,
+         menstrualbleeding,
+         firstdayofperiod, cycleday,
+         LHgroup_midfol_LH, LHgroup_periov_LH,
+         LHgroup_midluteal_count, LHgroup_perimenstrual_count, cleartrialphase) %>%
+  View()
+
+#midluteal and midfol overlaps: n=4
+c2daily_LHsample %>%
+  filter(LHgroup_periov_LH==1) %>%
+  filter(LHgroup_midluteal_count==1) %>%
+  select(id, daterated, posLHtoday, daycountLH,
+         menstrualbleeding,
+         firstdayofperiod, cycleday,
+         LHgroup_midfol_LH, LHgroup_periov_LH,
+         LHgroup_midluteal_count, LHgroup_perimenstrual_count, cleartrialphase) %>%
+  View()
+
+#midfol and perimenstrual overlaps: n=10
+c2daily_LHsample %>%
+  filter(LHgroup_midfol_LH==1) %>%
+  filter(LHgroup_perimenstrual_count==1) %>%
+  select(id, daterated, posLHtoday, daycountLH,
+         menstrualbleeding,
+         firstdayofperiod, cycleday,
+         LHgroup_midfol_LH, LHgroup_periov_LH,
+         LHgroup_midluteal_count, LHgroup_perimenstrual_count, cleartrialphase) %>%
+  View()
+
+c2daily_LHsample %>%
+  filter(LHgroup_periov_LH==1) %>%
+  filter(LHgroup_perimenstrual_count==1) %>%
+  select(id, daterated, posLHtoday, daycountLH,
+         menstrualbleeding,
+         firstdayofperiod, cycleday,
+         LHgroup_midfol_LH, LHgroup_periov_LH,
+         LHgroup_midluteal_count, LHgroup_perimenstrual_count) %>%
+  View()
+  
+
+```
+
+#create overrides
+```{r}
+
+c2daily_LHsample <- c2daily_LHsample %>%
+  #if midluteal by backward count and periov by LH surge are both 1, keep periov and change midluteal to 0
+  mutate(LHgroup_midluteal_count = case_when(LHgroup_periov_LH==1 ~ 0,
+                                        TRUE ~ LHgroup_midluteal_count))
+
+#check overlaps again
+c2daily_LHsample %>%
+  filter(id %in% c2_LHids) %>%
+  group_by(LHgroup_periov_LH, LHgroup_midluteal_count, LHgroup_perimenstrual_count,LHgroup_midfol_LH) %>%
+  summarize(n=n())
+
+c2daily_LHsample <- c2daily_LHsample %>%
+  #if perimenstrual by firstdayofperiod and midfol by pre-LH count are both 1, perimen wins, make midfol=0
+  mutate(LHgroup_midfol_LH = case_when(LHgroup_perimenstrual_count==1 ~ 0,
+                                        TRUE ~ LHgroup_midfol_LH))  
+
+
+```
+
+
+#Remove the cycles where data showed a 3-4 day luteal phase
+-229: washout between C2+C3 (cleartrialphase 8-9)
+-244: washout between C1+C2 (cleartrial phase 4-5)
+```{r}
+
+c2daily_LHsample <- c2daily_LHsample %>%
+  filter(!(id==229 & cleartrialphase>7)) %>%
+  filter(!(id==244 & (cleartrialphase==4 | cleartrialphase==5)))
+
+```
+
+# review again
+```{r}
+c1daily_LHsample %>%
+  group_by(LHgroup_periov_LH, 
+           LHgroup_midluteal_count, 
+           LHgroup_perimenstrual_count, 
+           LHgroup_midfol_LH) %>%
+  summarize(n=n())
+```
+
