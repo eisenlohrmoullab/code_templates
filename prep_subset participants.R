@@ -22,5 +22,3 @@ unique(etoh_data$id) #visually inspect all the IDs taht got included
 #save an object that is a list of your participants
 etoh_participants <- c(unique(etoh_data$id))
 
-
-## test one more time - global git settings had me as "temo@uic.edu" because that is built into clear2
