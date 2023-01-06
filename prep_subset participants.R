@@ -22,4 +22,4 @@ unique(etoh_data$id) #visually inspect all the IDs taht got included
 #save an object that is a list of your participants
 etoh_participants <- c(unique(etoh_data$id))
 
-#someone should find this line and delete it to ensure that the slack-github integration is working!
+
