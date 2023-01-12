@@ -1,0 +1,40 @@
+---
+title: "prep_multilevel_spline_variables"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r libraries and data import}
+library(haven) #for reading files, especially useful for importing SPSS files 
+library(tidyverse) #for data management and manipulation
+
+#Import your dataset that you will be analyzing. If you are analyzing data across multiple studies, make sure you import the fully merged dataset (with level 1 data, example: each row is a day, clustered by participant ID) that you will be running your multilevel spline models on
+#CLEAR3 daily surveys + cleartrialphase and meds
+
+#This is clear3 daily for this example.
+daily <- read_sav("C:/Users/anish/Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR3/02_datasets/CLEAR3_DAILY/03_cleaned_data/2022-12-7_INTERIM ANALYSISforSTRAIN_clear3dailysurvey_phasemeds.sav")
+```
+
+Codebook for cycleday variables: https://docs.google.com/spreadsheets/d/13_wRtiV5pVnotzwDgJxqeDhXtSOQgLM5DurKQMp7krI/edit?usp=sharing
+
+```{r creation of cycleday spline variables}
+daily$cycleday13w0 <- as.numeric(daily$cycleday13w0) #go form -13 to +13, backward counting trumps forward counting, with 0
+#pretime variable: 
+daily$pretime <- daily$cycleday13w0 + 14
+#posttime variable:
+##if < 14, = 0
+##14-26 is coded as 1:13
+daily$posttime <- daily$pretime
+daily$posttime <- daily$posttime - 13
+daily$posttime[daily$posttime < 1] <- 0
+#pretime_scale variable:
+daily$pretime_scale <- daily$pretime/13
+#posttime_scale variable:
+daily$posttime_scale <- daily$posttime/13
+#check how many participant ids
+length(unique(daily$id))
+#114 participants daily 
+```
+
+
