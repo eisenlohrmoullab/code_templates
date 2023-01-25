@@ -1,8 +1,10 @@
 ---
 title: "Johnson-Neyman Plot Template"
-author: "Anisha Nagpal" 
+author: "Anisha Nagpal"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -39,7 +41,7 @@ summary(model1)
 #make sure you include lme4 package when putting your model in an object, because if you have the lmertest package imported then the lmer function from lmertest with override lme4 and the johnson_neyman plot function from the interactions package will not work 
 ```
 
-###Plotting!
+### Plotting!
 
 ```{r}
 #for model, include the name of the object you placed your model in
