@@ -79,7 +79,7 @@ interPlot <- function(d, mod, ylab, legend){
 
 ### Plot!
 
-```{r}
+```{r fig.height = 4, fig.width = 10}
 interPlot(d1NA, d1NA$StressCT, "Negative Affect", "Number of Lifetime Stressors")
 #parameters: combined dataframe of pretime and posttime estimates, moderator from dataframe of pretime and posttime estimates, xlab name, legend title 
 ```
