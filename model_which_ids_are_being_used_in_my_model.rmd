@@ -39,27 +39,19 @@ model1_NA <- lmerTest::lmer(neg_affect ~ pretime_scale + posttime_scale + Stress
 summary(model1_NA) #converges, no issues 
 ```
 
-```
-
-
 
 ```{r}
-# Find the unique IDs in the model data
+# Find the unique IDs in the model data and save as model1_NA_id
  
  model1_NA_id <- unique(model1_NA@flist[[1]])
  model1_NA_id
 
-#  #201  202  203  204  205  206  208  209  210  211  212  213  214  215  216  217  220  221  222  223  224 
-#  225  226  227  229  231  234  235  236  237  239  240  241  242  243  244  247  249  251  252  254  255 
-# 256  257  258  259  260  261  3005 3011 3012 3016 3017 3019 3021 3023 3024 3025 3026 3028 3029 3030 3031
-#   3032 3041 3043 3044 3045 3046 3047 3048 3049 3050 3051 3052 3055 3056 3057 3058 3059 3060 3062 3064 3066
-#  3067 3069 3070 3072 3073 3074 3077 3078 3079 3080 3081 3082 3083 3084 3085 3088 3089 3090 3091 3092 3093
-#  3094 3095 3096 3097 3098 3099 3100 3101 3102 3104 3105 3106 3107 3108 3109 3110 3111 3114 3117
+#Find which id's are in the data and not being used by the model, save as model1_NA_miss 
  
  model1_NA_miss <- setdiff(dat$id, model1_NA_id)
 #218 3002 3004 3006 3008 3015 3054 3061 3068 3103 3115 3119 3120
  
-#For every id in model1_NA_miss, how many observations of non-NA neg_affect exist in the dataframe dat
+#For every id in model1_NA_miss, how many observations of non-NA/non-missing neg_affect (outcome of my model) exist in the dataframe dat
 # Create a subset of dat with non-missing and non-empty neg_affect values
 dat_modNA1 <- dat %>% 
   filter(!is.na(neg_affect) & neg_affect != "")
@@ -68,7 +60,7 @@ dat_modNA1 <- dat %>%
 result_df <- data.frame(id = numeric(),
                         num_obs = numeric())
 
-# Loop over IDs in model1_NA_miss and count the number of non-missing numerical observations
+# Loop over IDs in model1_NA_miss and count the number of non-missing numerical observations for each id
 for (id in model1_NA_miss) {
   num_obs <- dat_modNA1 %>% 
     filter(id == !!id) %>% 
@@ -85,15 +77,19 @@ print(result_tbl)
 
 
 #function to investigate different id's that are not included in the model 
+
+#save all columns that start with DRSP in a vector 
 drsp_cols <- names(dat)[grep("^DRSP", names(dat))]
 
 
 idInv <- function(numid){
-  dat_id <- subset(dat, id == numid, select = c("id","daterated", "neg_affect", drsp_cols))
+  dat_id <- subset(dat, id == numid, select = c("id","daterated", "neg_affect", drsp_cols)) #you can edit this to include which variables you want to view for each 
   names(dat_id) <- paste0("dat_", numid, "_", names(dat_id))
   return(dat_id)
 }
 
+
+#run the idInv function on id's that are not included in the model 
 dat_218 <- idInv(218)
 dat_218 #only 5 cycle days, withdrew from study shortly after enrolling
 dat_3054 <- idInv(3054) #only 4 cycle days, withdrew from study shortly after enrolling
