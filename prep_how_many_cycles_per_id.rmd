@@ -14,12 +14,12 @@ library(devtools)
 library(tidyverse)
 ```
 
-Use the code below to create a new variable called 'cycle' which tells you which cycle a particular row of data is contributing to, within a person. In order to run the code below you must have the variables 'id' and 'cycleday' in your dataset. This prep code is necessary to run the R cpass package. The code below assumes your dataframe is called 'dat'. You can change the name of 'dat' to match whatever your dataframe is. Please reach out to Anisha if you have any questions! 
+Use the code below to create a new variable called 'cycle' which tells you which cycle a particular row of data is contributing to, within a person. In order to run the code below you must have the variables 'id', 'cycleday', and 'daterated' in your dataset. This prep code is necessary to run the R cpass package. The code below assumes your dataframe is called 'dat'. You can change the name of 'dat' to match whatever your dataframe is. Please reach out to Anisha if you have any questions! 
 
 
 
 ```{r}
-dat <- dat %>% group_by(id) %>% arrange(date_rated, .by_group = TRUE)
+dat <- dat %>% group_by(id) %>% arrange(date_rated, .by_group = TRUE) #can rename to 'daterated' instead of 'date_rated' 
 
 # create new cycle variable
 dat$cycle <- NA
