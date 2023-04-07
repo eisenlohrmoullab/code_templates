@@ -19,6 +19,8 @@ Use the code below to create a new variable called 'cycle' which tells you which
 
 
 ```{r}
+dat <- dat %>% group_by(id) %>% arrange(date_rated, .by_group = TRUE)
+
 # create new cycle variable
 dat$cycle <- NA
 
