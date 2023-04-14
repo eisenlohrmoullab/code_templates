@@ -32,4 +32,32 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - what it does: creates a numeric variable that counts days the participant has been in study since enrollment, which can be used to model effects of linear time as a covariate.
 - when to use: if you want to covary time in study in your model.
 
-**model_multilevelmodels.R"
+**model_multilevelmodels.R**
+- author: Jordan
+- what it does: various examples of MLMs using lme4 package and nlme package. options with and without random intercepts/slopes; logistic vs linear outcomes; dummy coded cycle variables, etc.
+- when to use: any multilevel model.
+
+**plot_cyclephase and day-KY.Rmd**
+- author: Jordan
+- what it does: function to calculate person-means and person-deviations; loop to run those functions on outcomes of interest; create line graph of person-centered outcomes across cycle day; create line graph of person-centered outcomes across cycle phase.
+- when to use: when plotting raw data from a daily dataset. 
+
+**plot_Raincloud Plot.Rmd**
+- author: Jordan
+- what it does: create a "raincloud plot" of fixed and random effects from a multilevel model, which is a combination of a histogram (summary of individual random effects), a scatter plot (individual random effects), and a box plot (fixed effects).
+- when to use: a possibility for plotting your MLM outcomes.
+
+**prep_calc-cyclicity-as-percentage.Rmd**
+- author: Jordan
+- what it does: calculate percent change in DRSP symptoms using C-PASS (premenstrual vs postmenstrual) or How To Study the Menstrual Cycle (perimenstrual vs midfollicular) phases; create histograms of each person's percent change in that symptom; creates a categorical variable to indicate if a person has over 30% change between cycle phases.
+- when to use: when describing symptom cyclicity based on raw daily data. 
+
+**prep_Cycle Phase Coding 5 phase - ADHD-KY.Rmd**
+- author: Jordan
+- what it does: create cycle day using menses; create cycle day using LH; create cycle phases based on both menses-day-counts and LH-day-counts; review and edit the "hybrid cycle phase" count system. called "5-phase" because it includes an early luteal phase (periovulatory, early luteal, midluteal, perimenstrual, midfollicular). template was created for ADHD-KY Collaboration, but can be renamed and used for any CLEAR lab data.
+- when to use: after daily dataset is fully clean, but before running analyses.
+
+**prep_Cycle Phase Coding for ADHD-KY.Rmd**
+- author: Jordan
+- what it does: create cycle day using menses; create cycle day using LH; create cycle phases based on both menses-day-counts and LH-day-counts; review and edit the "hybrid cycle phase" count system. does NOT include an early luteal phase (periovulatory, midluteal, perimenstrual, midfollicular). template was created for ADHD-KY Collaboration, but can be renamed and used for any CLEAR lab data.
+- when to use: after daily dataset is fully clean, but before running analyses.
