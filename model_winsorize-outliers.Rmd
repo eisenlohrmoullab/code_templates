@@ -1,0 +1,36 @@
+---
+title: "model_winsorize-outliers"
+author: "Jordan Barone"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# outliers: winsorize and remove
+This function winsorizes values and tells the function that we want to winsorize anything outside of 3 standard deviations of the mean. creates new variables that end in ".w" to indicate that column has been winsorized. 
+```{r}
+#write function to winsorize!
+calc.w.column <- function(x, newx) {
+  
+  narsad_full[[newx]] <<- Winsorize(narsad_full[[x]],
+               minval = (mean(narsad_full[[x]], na.rm=T) - 3*sd(narsad_full[[x]], na.rm=T)),
+               maxval = (mean(narsad_full[[x]], na.rm=T) + 3*sd(narsad_full[[x]], na.rm=T)))
+
+}
+
+
+calc.w.column("il1b", "il1b.w")
+calc.w.column("il6", "il6.w")
+calc.w.column("tnfa", "tnfa.w")
+
+#log-transform the new winsorized variables to be consistent
+narsad_full <- narsad_full %>%
+  mutate(tnfa.w.log = log(tnfa.w),
+         il6.w.log = log(il6.w),
+         il1b.w.log = log(il1b.w))
+
+```
