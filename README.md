@@ -83,7 +83,12 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - what it does: example for creating a person-mean, a daily person deviation, and plotting a person-centered outcome across the cycle.
 - When to use: When visualizing one outcome across the cycle, raw data.
 - ***Note: This is saved as a text file because I had initlally just written it as a slack message for someone. Can be changed into a script.
-- ***Note 2: I now have better code to do this in a loop, for many outcomes at once. Need to turn that into a template asap! If this note is still present and you go to use this script, it means I haven't saved the functions as their own template yet - contact Jordan for better code :) 
+- ***Note 2: I now have better code to do this in a loop, for many outcomes at once. Use "prep_person-means-person-devs-rolling-avgs.Rmd"
+
+**prep_person-means-person-devs-rolling-avgs.Rmd**
+- author: Jordan
+- what it does: writes functions and runs them within a for loop on a list to: create person-means; create person-centered deviations; create 3-day rolling averages
+- When to use: when prepping your analytic data for graphing.
 
 **prep_review cycle vars.R**
 - author: Jordan
@@ -99,3 +104,5 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - author: Jordan
 - what it does: calculates descriptive information for your demographic table/Table 1. Also has sample code for using the TableOne package in R. Example code for summary stats on Age, Race, Ethnicity, Number of Suicide Attempts, Lifetime Suicidal Behavior (Y/N). Creates SCID categorical variables such as "any lifetime SUD", "Current Depressive Disorder", "Any Current Anxiety Disorder" etc. Plot code for looking at samples by age, race, marital status, sexual orientation, education.
 - When to use: After you know exactly which participants are in your analytic sample.
+
+
