@@ -105,4 +105,7 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - what it does: calculates descriptive information for your demographic table/Table 1. Also has sample code for using the TableOne package in R. Example code for summary stats on Age, Race, Ethnicity, Number of Suicide Attempts, Lifetime Suicidal Behavior (Y/N). Creates SCID categorical variables such as "any lifetime SUD", "Current Depressive Disorder", "Any Current Anxiety Disorder" etc. Plot code for looking at samples by age, race, marital status, sexual orientation, education.
 - When to use: After you know exactly which participants are in your analytic sample.
 
-
+**prep_3day-symptom-avgs.Rmd**
+- author: Jordan
+- what it does: creates an average of daily survey symptom ratings from the survey completed on a blood draw day, the day after, and 2 days after.
+- When to use: When you want to relate the daily data with a predictor from the lab visit.
