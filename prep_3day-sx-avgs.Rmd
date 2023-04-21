@@ -1,0 +1,71 @@
+---
+title: "prep_3day-means"
+author: "Jordan Barone"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+This code was used for calculating SI-related symptoms on the three days after a blood draw in the CLEAR1 dataset. We wanted to model the relationship between biomarkers and symptoms, and did a 3-day-post-visit average because:
+1. There are many missing surveys on the actual lab visit days
+2. We cannot use the in-lab survey, because it occurs BEFORE the blood draw
+
+## library and data
+```{r}
+
+library(tidyverse)
+library(haven)
+
+df <- read.csv()
+
+```
+
+
+## create daily variables to go along with today's symptom, "next days symptom" and "symptom two days later"
+
+```{r}
+
+#create next day planning + next day symptoms
+df <- df %>%
+  arrange(id, date) %>%
+  group_by(id) %>%
+  mutate(nextday_ASIQplan = lead(ASIQ_planning),
+         nextday_ASIQmean = lead(ASIQ_mean),
+         twoday_ASIQplan = lead(ASIQ_planning, n=2),
+         twoday_ASIQmean = lead(ASIQ_mean, n=2))
+
+
+```
+
+
+## create 72 hour means for SI variables
+```{r SI variables, echo=TRUE}
+
+#ASIQ_composite
+df <- df %>%
+  rowwise() %>%
+  mutate(threeday_SI = mean(c(ASIQ_mean, nextday_ASIQmean, twoday_ASIQmean), na.rm=TRUE),
+         threeday_dep = mean(c(DRSP1_depblue, nextday_DRSP1dep, twoday_DRSP1dep), na.rm=TRUE),
+         threeday_anx = mean(c(DRSP4_anxious, nextday_DRSP4anx, twoday_DRSP4anx), na.rm=TRUE))
+
+#log transform
+narsad_full <- narsad_full %>%
+  mutate(threeday_SI.log = log(threeday_SI),
+         threeday_dep.log = log(threeday_dep),
+         threeday_anx.log = log(threeday_anx))
+
+#planning (0 or 1)
+narsad_full <- narsad_full %>%
+  rowwise() %>%
+  mutate(threeday_plan = 
+           case_when(ASIQ_planning==1 | nextday_ASIQplan==1 | twoday_ASIQplan==1 ~ 1,
+                     TRUE ~ 0))
+
+
+narsad_full <- narsad_full %>% 
+  group_by(id) %>%
+  mutate(SIMean_acrosslabs = mean(threeday_SI, na.rm=T),
+         DEPMean_acrosslabs = mean(threeday_dep, na.rm=T),
+         ANXMean_acrosslabs = mean(threeday_anx), na.rm=T)
+
+
+```
