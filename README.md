@@ -73,7 +73,7 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - what it does: creates daycountLH, which codes a verison of cycleday based on LH surge from days -7 to +15 surrounding ovulation.  Then, creates midfollicular, periovulatory and early luteal phases baesd on LH surge; and mdiluteal and perimenstrual phases based on menses count. Reviews overlaps between LH- and menses-based phases, then creates overrides to fix double-counted days.
 - When to use: For analyses of baseline CLEAR data, after "prep_cycleday_cyclephase.Rmd" script was used to create menses-based variables. 
 
-**prep_lag-and-unlag-vars.Rmd**
+**prep_lag-and-unlag-vars.R**
 - author: Jordan
 - what it does: Unlags variables that ask about yesterday so they align with the day they are about. Create next day and 2-day-later symptoms for later averaging (ex: 3 day symptom mean).
 - When to use: When prepping for an analysis that uses day before or day after variables.
@@ -83,4 +83,19 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - what it does: example for creating a person-mean, a daily person deviation, and plotting a person-centered outcome across the cycle.
 - When to use: When visualizing one outcome across the cycle, raw data.
 - ***Note: This is saved as a text file because I had initlally just written it as a slack message for someone. Can be changed into a script.
-- ***Note 2: I now have better code to do this in a loop, for many outcomes at once. Need to turn that into a template asap! 
+- ***Note 2: I now have better code to do this in a loop, for many outcomes at once. Need to turn that into a template asap! If this note is still present and you go to use this script, it means I haven't saved the functions as their own template yet - contact Jordan for better code :) 
+
+**prep_review cycle vars.R**
+- author: Jordan
+- what it does: views and checks your cycle related variables, such as daycountLH, cycleday, firstdayofperiod, and posLHtoday to check for anything weird. Such as: how many observations fall under each cycle day? how many observations fall under each cycle phase? are there any days that are double counted in phases? Also creates labeled phase variable for graphing and removes days that are not in cycle-phase-based models.
+- When to use: After you have created your cycle variables, but before running your models.
+
+**prep_subset participants.R**
+- author: Jordan
+- what it does: creates a dataset with or without a list of specific participants.
+- When to use: In your data prep file that is specific to your analytic project.
+
+**prep_table1_demographics.Rmd**
+- author: Jordan
+- what it does: calculates descriptive information for your demographic table/Table 1. Also has sample code for using the TableOne package in R. Example code for summary stats on Age, Race, Ethnicity, Number of Suicide Attempts, Lifetime Suicidal Behavior (Y/N). Creates SCID categorical variables such as "any lifetime SUD", "Current Depressive Disorder", "Any Current Anxiety Disorder" etc. Plot code for looking at samples by age, race, marital status, sexual orientation, education.
+- When to use: After you know exactly which participants are in your analytic sample.
