@@ -10,6 +10,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+# library + data
+```{r}
+library(DescTools) #this library has the Winsorize function
+
+read.csv()
+```
+
+
 # outliers: winsorize and remove
 This function winsorizes values and tells the function that we want to winsorize anything outside of 3 standard deviations of the mean. creates new variables that end in ".w" to indicate that column has been winsorized. 
 ```{r}
