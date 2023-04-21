@@ -1,0 +1,94 @@
+---
+title: "plot_implied_val_interaction_plots_splines"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(haven) #importing .sav files into R
+library(ggplot2) #creating plot labels
+library(lme4) #MLM models 
+library(emmeans) #lib for extracting predicted model vals for different implied interaction vals
+library(latex2exp) #lib for using laTex in ggplot labels 
+
+#set your working directory (where your Github files are saved locally on your computer)
+knitr::opts_knit$set(root.dir = "C:/Users/anish/Documents/Clear Lab Repositories/code_templates_AN")
+#Import your dataset that your model is based on
+dat <- read_sav( "C:/Users/anish/Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEARCOMBINED_projects/CLEAR23_STRAIN/02_code_dataedits_output/STRAIN23_merged_data_prepped.sav")
+```
+
+
+### Write your model using Lme4 
+
+```{r}
+model1a <- lme4::lmer(neg_affect ~ pretime_scale + posttime_scale + StressCT + age_z + SSRI + StressCT:pretime_scale + StressCT:posttime_scale + SSRI:pretime_scale + SSRI:posttime_scale + (1 + pretime_scale |id), data = dat, REML = TRUE)
+summary(model1a)
+```
+
+### Specifying Model Estimates for pretime spline
+
+- Here we extract the mean predicted values of your model for the pretime spline 
+
+```{r}
+d1NApre <- as.data.frame(emmip(model1a, StressCT ~ pretime_scale, at = list(pretime_scale = seq(-1, 0, by = (1/13)), StressCT = c(4, 44, 73) ), CIs =TRUE, plotit = FALSE)) 
+#at = list(timespline = c([values of time spline]), moderator =c([values of continous mod that you want to plot]))
+##these value of time spline are -13 to +13, with menses centered at 0, and then scaled, so divided by 13. Therefore the pretime spline ranges from -1 to 0
+#CIs = confidence intervals 
+d1NApre$time <- "pretime" #specify that these model estimates are for pretime spline, by adding a string "pretime"
+d1NApre$posttime_scale = 0 #posttime vals should be 0 when plotting the pretime spline 
+
+```
+
+### Specifying Model Estimates for posttime spline
+
+- Here we extract the mean predicted values of your model for the posttime spline 
+
+```{r}
+d1NApost <- as.data.frame(emmip(model1a, StressCT ~ posttime_scale, at = list(posttime_scale = seq(0,1, by = (1/13)), StressCT = c(4, 44, 73) ), CIs =TRUE, plotit = FALSE)) 
+#at = list(timespline = c([values of time spline]), moderator =c([values of continous mod that you want to plot]))
+##these value of time spline are -13 to +13, with menses centered at 0, and then scaled, so divided by 13. Therefore the posttime spline ranges from 0 to 1
+#CIs = confidence intervals 
+d1NApost$time <- "posttime"
+d1NApost$pretime_scale = 0 #pretime vals should be 0 when plotting the posttime spline 
+```
+
+### Combine Pretime and Postime estimates into 1 dataframe 
+
+```{r}
+d1NA <- rbind(d1NApre, d1NApost)
+```
+
+### InterPlot (plotting Function I wrote to follow lab conventions for counting cycle days) 
+
+```{r}
+interPlot <- function(d, mod, ylab, legend){
+  ggplot(d, aes(x = xvar, y = yvar, group = factor(mod), color = factor(mod))) + 
+    geom_line() +
+    geom_point() + 
+    xlab("Cycle Day") +
+    ylab(ylab) + 
+    labs(color = legend)+
+    scale_x_continuous(limits = c(-1,1), breaks = round(seq(-1 ,1, by = (1/13)), 2), labels=c("-13", "-12", "-11", "-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"))+
+    geom_vline(xintercept = 0, color = "red") +
+    geom_errorbar(aes(ymin = LCL, ymax = UCL), alpha = 0.2) +
+    theme_bw()
+}
+
+```
+
+### Plot!
+
+```{r fig.height = 4, fig.width = 10}
+interPlot(d1NA, d1NA$StressCT, "Negative Affect", "Number of Lifetime Stressors")
+#parameters: combined dataframe of pretime and posttime estimates, moderator from dataframe of pretime and posttime estimates, xlab name, legend title 
+```
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,79 @@
+---
+title: "prep_how_many_cycles_per_id?"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(haven) #Use to import .sav files 
+library(tidyr)
+library(stringr)
+library(devtools)
+library(tidyverse)
+```
+
+Use the code below to create a new variable called 'cycle' which tells you which cycle a particular row of data is contributing to, within a person. In order to run the code below you must have the variables 'id', 'cycleday', and 'daterated' in your dataset. This prep code is necessary to run the R cpass package. The code below assumes your dataframe is called 'dat'. You can change the name of 'dat' to match whatever your dataframe is. Please reach out to Anisha if you have any questions! 
+
+
+
+```{r}
+dat <- dat %>% group_by(id) %>% arrange(date_rated, .by_group = TRUE) #can rename to 'daterated' instead of 'date_rated' 
+
+# create new cycle variable
+dat$cycle <- NA
+
+# iterate over id groups
+for (id in unique(dat$id)) {
+  cycle_count <- 1
+  stretch_count <- 1
+  stretch_flag <- FALSE
+  prev_cycleday <- NA
+  last_cycle <- NA
+  for (i in which(dat$id == id)) {
+    # skip rows with NA cycleday
+    if (is.na(dat$cycleday[i])) {
+      dat$cycle[i] <- NA
+      stretch_flag <- FALSE
+      prev_cycleday <- NA
+      next
+    }
+    # increment cycle_count if current row starts a new stretch
+    if (!stretch_flag && dat$cycleday[i] %in% c(-15, -14, -13, -12, -11, -10, 
+                                                  -9, -8, -7, -6, -5, -4, 
+                                                  -3, -2, -1, 1, 2, 3, 4, 
+                                                  5, 6, 7, 8, 9, 10, -1, 1) && 
+        (is.na(prev_cycleday) || !(prev_cycleday %in% c(-15, -14, -13, -12, -11, -10, 
+                                                  -9, -8, -7, -6, -5, -4, 
+                                                  -3, -2, -1, 1, 2, 3, 4, 
+                                                  5, 6, 7, 8, 9, 10, -1, 1)))) {
+      # increment cycle by 1 if there is a last cycle value within the same id group
+      if (!is.na(last_cycle)) {
+        cycle_count <- last_cycle + 1
+      }
+      dat$cycle[i] <- cycle_count
+      stretch_flag <- TRUE
+    }
+    # update cycle variable within a stretch
+    else if (stretch_flag) {
+      dat$cycle[i] <- cycle_count
+      # increment stretch_count if current row is the end of a stretch
+      if (!dat$cycleday[i] %in% c(-15, -14, -13, -12, -11, -10, -9, -8, 
+                                   -7, -6, -5, -4, -3, -2, -1, 1, 2, 
+                                   3, 4, 5, 6, 7, 8, 9, 10, -1, 1)) {
+        stretch_count <- stretch_count + 1
+        cycle_count <- cycle_count + 1
+        stretch_flag <- FALSE
+      }
+    }
+    prev_cycleday <- dat$cycleday[i]
+  last_cycle <- dat$cycle[i]
+  }
+}
+
+
+dat %>%
+  select(id, cycleday, StartPeriod, cycle) #this is to just check how id, cycleday, StarttPeriod, and cycle all line up. StartPeriod is the same as firstdayperiod. 
+```
+

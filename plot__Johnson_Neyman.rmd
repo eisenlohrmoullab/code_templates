@@ -1,0 +1,69 @@
+---
+title: "Johnson-Neyman Plot Template"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(haven) #importing .sav files into R
+library(ggplot2) #editing labels on your plot
+library(lme4) #MLM models 
+library(gridExtra)
+library(lmerTest) #using lmerTest to get p-values
+library(interactions) #library for johnson-neyman plots
+
+#set your working directory (where your Github files are saved locally on your computer)
+knitr::opts_knit$set(root.dir = "C:/Users/anish/Documents/Clear Lab Repositories/code_templates_AN")
+#Import your dataset that your model is based on
+dat <- read_sav( "C:/Users/anish/Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEARCOMBINED_projects/CLEAR23_STRAIN/02_code_dataedits_output/STRAIN23_merged_data_prepped.sav")
+
+```
+
+### Why use Johnson-Neyman Plots and what do they show?
+
+Johnson Neyman tells us at which point of M, X can significantly predict Y 
+
+$$Y = \beta_0 + \beta_1{X} + \beta_2{M} + \beta_3{X} \times M$$
+
+$$\frac{\partial Y}{\partial X} = \beta_1 + \beta_3 \times M$$
+
+In Johnson-Neyman plots, this partial derivative is being plotted on the y-axis and the moderator is plotted on the x-axis. The line on the plot is the slope $\beta_3$. 
+
+### Create your interaction Model 
+
+```{r}
+model1 <- lme4::lmer(neg_affect ~ pretime_scale + posttime_scale + StressCT + age_z + SSRI + StressCT:pretime_scale + StressCT:posttime_scale + SSRI:pretime_scale + SSRI:posttime_scale + (1 + pretime_scale |id), data = dat, REML = TRUE)
+summary(model1)
+#make sure you include lme4 package when putting your model in an object, because if you have the lmertest package imported then the lmer function from lmertest with override lme4 and the johnson_neyman plot function from the interactions package will not work 
+```
+
+### Plotting!
+
+```{r}
+#for model, include the name of the object you placed your model in
+#for pred, include your predictor that your moderator is interacting with 
+#for modx, include the variable name of your moderator 
+
+model1plot <- johnson_neyman(model=model1, pred = pretime_scale, modx = StressCT)
+
+#here you can call the plot in the model1plot by using the $: model1plot$plot 
+#you can edit parameters in your plot by using notation from ggplot2
+#the function johnson_neyman uses ggplot2 
+
+model1plot$plot +
+  xlab("Stressor Counts")+ 
+  ylab("Change in Negative Affect by Pretime Scale")
+```
+
+### Interpreting the plot!
+
+The Y-axis are the slopes of your predictor variable. In this example the predictor I used is pretime, where pretime is a scaled variable ranging from (0-1] and corresponds to the 13 days before menses and is a within-person variable. Since the Y-axis is the slopes of the predictor variable, it is the change in your model Y-variable for every 1 unit increase in your predictor variable. In this example, the predictor variable is pretime and the Y-variable is within-person daily negative affect composite. SO the Y-axis of the plot can be interpreted as the change in negative affect by pretime, or the within-person pretime symptom cyclicity. 
+
+This plot shows that the within-person pretime symptom cyclicity slopes are significant at values of total stressor counts (12.12, 73]. The range of stressor counts in our data is [6.00, 73.00].
+
+
+
