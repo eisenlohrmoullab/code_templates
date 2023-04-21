@@ -56,8 +56,31 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - author: Jordan
 - what it does: create cycle day using menses; create cycle day using LH; create cycle phases based on both menses-day-counts and LH-day-counts; review and edit the "hybrid cycle phase" count system. called "5-phase" because it includes an early luteal phase (periovulatory, early luteal, midluteal, perimenstrual, midfollicular). template was created for ADHD-KY Collaboration, but can be renamed and used for any CLEAR lab data.
 - when to use: after daily dataset is fully clean, but before running analyses.
+- ***Note: After reviewing this script and the other ones, I think this may be best for collaborations that do not use our experimental paradigm, while "prep_hybrid-LH-menses-cycleday-coding.Rmd" is best for clear lab data specifically.
 
 **prep_Cycle Phase Coding for ADHD-KY.Rmd**
 - author: Jordan
 - what it does: create cycle day using menses; create cycle day using LH; create cycle phases based on both menses-day-counts and LH-day-counts; review and edit the "hybrid cycle phase" count system. does NOT include an early luteal phase (periovulatory, midluteal, perimenstrual, midfollicular). template was created for ADHD-KY Collaboration, but can be renamed and used for any CLEAR lab data.
 - when to use: after daily dataset is fully clean, but before running analyses.
+
+**prep_cycleday_cyclephase.Rmd**
+- author: Jordan
+- what it does: creates a cycleday variable (-15 to +10) based on menses count only. Then, creates 4 cycle phase dummy code variables based on counting (midluteal, perimenstrual, midfollicular, periovulatory). Does not use any LH-surge data. Finally, adds one variable with all 4 cycle phases (numbered 1-4) for graphing.
+- When to use: when graphing or analyzing any daily data based exclusively on menses count.
+
+**prep_hybrid-LH-menses-cycleday-coding.Rmd**
+- author: Jordan
+- what it does: creates daycountLH, which codes a verison of cycleday based on LH surge from days -7 to +15 surrounding ovulation.  Then, creates midfollicular, periovulatory and early luteal phases baesd on LH surge; and mdiluteal and perimenstrual phases based on menses count. Reviews overlaps between LH- and menses-based phases, then creates overrides to fix double-counted days.
+- When to use: For analyses of baseline CLEAR data, after "prep_cycleday_cyclephase.Rmd" script was used to create menses-based variables. 
+
+**prep_lag-and-unlag-vars.Rmd**
+- author: Jordan
+- what it does: Unlags variables that ask about yesterday so they align with the day they are about. Create next day and 2-day-later symptoms for later averaging (ex: 3 day symptom mean).
+- When to use: When prepping for an analysis that uses day before or day after variables.
+
+**prep_Person Mean Centering and Plotting by Phase.rtf**
+- author: Jordan
+- what it does: example for creating a person-mean, a daily person deviation, and plotting a person-centered outcome across the cycle.
+- When to use: When visualizing one outcome across the cycle, raw data.
+- ***Note: This is saved as a text file because I had initlally just written it as a slack message for someone. Can be changed into a script.
+- ***Note 2: I now have better code to do this in a loop, for many outcomes at once. Need to turn that into a template asap! 
