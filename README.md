@@ -5,7 +5,7 @@ TEST: January 5th, 2023. Jordan linked to slack.
 
 As of April 10th 2023, Data Team decided to keep a list of code_templates in the Readme file.
 
-**scripts that start with "clean_" should be used for cleaning datasets. scripts that start with "model_" are useful for your analytic models. 
+**scripts that start with "clean_" should be used for cleaning datasets. scripts that start with "model_" are useful for your analytic models. scripts that start with "plot_" are useful for rendering plots/images related to analytic projects. 
 
 **check_packages.R**
 - author: Jordan
@@ -41,6 +41,11 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - what it does: various examples of MLMs using lme4 package and nlme package. options with and without random intercepts/slopes; logistic vs linear outcomes; dummy coded cycle variables, etc.
 - when to use: any multilevel model.
 
+**model_which_ids_are_being_used_in_my_model.rmd**
+- author: Anisha
+- what it does: how to extract the id groups in your model and compare them to the id's in your analytic dataset. You can then investigate the id's that are not being used in your model and determine why they are not being used in the model (e.g. dropped out or withdrawn right after enrollment, did not have enough cycledays, ghosted, dropped out before they menstruated, etc.). You can also use this code to ensure all your demographic tables and descriptive analyses are done on the list of id's that are being utilized by your analytic models.
+- when to use: any MLM using lmertest or lme4
+
 ## Plot Templates
 
 **plot_cyclephase and day-KY.Rmd**
@@ -52,6 +57,16 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - author: Jordan
 - what it does: create a "raincloud plot" of fixed and random effects from a multilevel model, which is a combination of a histogram (summary of individual random effects), a scatter plot (individual random effects), and a box plot (fixed effects).
 - when to use: a possibility for plotting your MLM outcomes.
+
+**plot__Johnson_Neyman.rmd**
+- author: Anisha
+- what it does: Use when probing interactions. JN tells us at which point of modx, X can significantly predict Y.
+- when to use: analytic projects with interaction models 
+
+**plot_implied_val_interaction_plots_splines.rmd**
+- author: Anisha
+- what it does: Use when probing interactions in spline models. Plot implied splines at different modx values. This code can also be modified for just plotting splines :) 
+- when to use: analytic projects with splines
 
 ## Data Prep Templates
 
@@ -72,9 +87,14 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - when to use: after daily dataset is fully clean, but before running analyses.
 
 **prep_cycleday_cyclephase.Rmd**
-- author: Jordan
+- author: Jordan and Anisha 
 - what it does: creates a cycleday variable (-15 to +10) based on menses count only. Then, creates 4 cycle phase dummy code variables based on counting (midluteal, perimenstrual, midfollicular, periovulatory). Does not use any LH-surge data. Finally, adds one variable with all 4 cycle phases (numbered 1-4) for graphing.
 - When to use: when graphing or analyzing any daily data based exclusively on menses count.
+
+**prep_how_many_cycles_per_id.rmd**
+- author: Anisha
+- what it does: groups observations by which cycle they occurred in 
+- When to use: before running the cpass, or for any cycle-level descriptives/modeling 
 
 **prep_hybrid-LH-menses-cycleday-coding.Rmd**
 - author: Jordan
@@ -85,6 +105,11 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - author: Jordan
 - what it does: Unlags variables that ask about yesterday so they align with the day they are about. Create next day and 2-day-later symptoms for later averaging (ex: 3 day symptom mean).
 - When to use: When prepping for an analysis that uses day before or day after variables.
+
+**prep_multilevel_spline_variables.rmd**
+- author: Anisha
+- what it does: scales time to range from -1 to 1 with menses at 0 
+- When to use: before multilevel spline modeling 
 
 **prep_Person Mean Centering and Plotting by Phase.rtf**
 - author: Jordan
