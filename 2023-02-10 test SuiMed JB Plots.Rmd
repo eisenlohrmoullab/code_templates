@@ -1,0 +1,1503 @@
+---
+title: "SUIMED cycle phase, cycle day, aim 2 raincloud plots"
+author: "Jordan Barone"
+date: '2022-08-03'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+knitr::opts_knit$set(root.dir = "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEARCOMBINED_projects/SUIMED/03_code_dataedits_output/")
+
+knitr::opts_chunk$set(fig.width=9)
+
+```
+
+```{r, echo=F, warning=F}
+library(tidyverse)
+library(ggdist)
+library(ggforce)
+library(ggplot2)
+library(haven)
+library(zoo)
+```
+
+
+### import and clean data
+```{r}
+
+suimeddata <- read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEARCOMBINED_projects/SUIMED/03_code_dataedits_output/Mergeddaily+centering_Final.sav")
+
+#add in LH-LH_cyclephasenames for graphing
+suimeddata <- suimeddata %>% mutate(LH_cyclephase = case_when(LH_periov_LH==1 ~ 1,
+                                                              LH_earlylut_LH==1 ~ 2,
+                                                            LH_midluteal_count==1 ~ 3,
+                                                            LH_perimenstrual_count==1 ~ 4,
+                                                            LH_midfol_LH==1 ~ 5,
+                                                            TRUE ~ 0))
+
+suimeddata$LH_cyclephasenames <- factor(suimeddata$LH_cyclephase,
+                                    levels = c(0,1,2,3,4,5),
+                                     labels = c("none",
+                                                "periov",
+                                                "earlylut",
+                                                "midlut",
+                                                "perimen",
+                                                "midfol"))
+
+
+#separate dataset that can be used for graphing cycle day (keep days that have no cycle phase)
+suimeddata_cycleday <- suimeddata %>%
+  filter(!is.na(SI_Final))
+#switch 9999s to NA for R - easier to handle
+#suimeddata_cycleday <- suimeddata_cycleday %>%
+#  mutate_if(is.numeric, ~replace(., . == 9999, NA))
+
+#remove any day that does NOT get included in the models, aka any day that doesn't get an LH_cyclephase, or that are "NA" for "DRSP1" which means that they are dummy rows, only included for cycle phasing
+#suimeddata <- suimeddata %>%
+#  mutate_if(is.numeric, ~replace(., . == 9999, NA))
+suimeddata <- suimeddata %>% 
+  filter(LH_cyclephase!=0) %>%
+  filter(!is.na(SI_Final))
+
+
+```
+
+# hybrid cycle day
+```{r}
+#create hybrid version of cycle day:
+suimeddata_cycleday <- suimeddata_cycleday %>%
+  mutate(hybridcycleday = case_when((daycountLH >= -7 & daycountLH <= 5) ~ 
+                                      paste(as.character(daycountLH), "L", sep = ""),
+                                 (cycleday >= -9 & cycleday <= 7) ~ 
+                                   paste(as.character(cycleday), "M",  sep = ""),
+                                 TRUE ~ NA_character_))
+
+suimeddata_cycleday <- suimeddata_cycleday %>%
+  filter(!is.na(hybridcycleday)) %>%
+  arrange(id, daterated)
+
+hybridcycleday_order <- c("-7L",
+                       "-6L",
+                       "-5L",
+                       "-4L",
+                       "-3L",
+                       "-2L",
+                       "-1L",
+                       "0L",
+                       "1L",
+                       "2L",
+                       "3L",
+                       "4L",
+                       "5L",
+                       "-9M",
+                       "-8M",
+                       "-7M",
+                       "-6M",
+                       "-5M",
+                       "-4M",
+                       "-3M",
+                       "-2M",
+                       "-1M",
+                       "1M",
+                       "2M",
+                       "3M",
+                       "4M",
+                       "5M",
+                       "6M",
+                       "7M")
+```
+
+
+### functions to create person means and person deviations
+```{r echo=T}
+#function to create person means
+create.person.mean <- function(df, var, ...) {
+  df %>%
+    group_by(...) %>%
+    mutate("{{var}}.m" := mean({{var}}, na.rm=T))
+}
+#function to create person deviations (note, must have person means already made)
+create.deviation <- function(df, var, var.m) {
+  df <- df %>%
+    rowwise() %>%
+    mutate("{{var}}.d" := {{var}} - {{var.m}})
+}
+
+create.3day.rolling.avg <- function(df, var, num) {
+  df %>%
+    group_by(id) %>%
+    mutate("{{var}}.roll" := rollapply({{var}}, 3,  mean, align="center", fill=NA))
+}
+
+
+```
+
+## create outcome lists to loop through functions
+```{r echo=T}
+
+#raw outcomes
+suimed_varlist <- suimeddata %>%
+  select(c(BAM2_stirredupscream,
+           DRSP7_angirr,
+           DRSP4_anxious,
+           perceivedburden,
+           DRSP8_intconflict,
+           DRSP1_depblue,
+           DRSP2_hopeless,
+           DRSP16_overwhelm,
+           DRSP6_rejsens,
+           DRSP9_lessintmot,
+           DRSP3_worthguilt,
+           ASIQ9_wishdead,
+           SI,
+           SI_Final)) %>% 
+  colnames() %>% 
+  noquote()
+#suimed_varlist <- suimed_varlist[-1]
+
+#person-centered deviations
+suimed_varlist.d <- c("BAM2_stirredupscream.d",
+           "DRSP7_angirr.d",
+           "DRSP4_anxious.d",
+           "perceivedburden.d",
+           "DRSP8_intconflict.d",
+           "DRSP1_depblue.d",
+           "DRSP2_hopeless.d",
+           "DRSP16_overwhelm.d",
+           "DRSP6_rejsens.d",
+           "DRSP9_lessintmot.d",
+           "DRSP3_worthguilt.d",
+           "ASIQ9_wishdead.d",
+           "SI.d",
+           "SI_Final.d") %>% noquote()
+
+#rolling averages
+suimed_varlist.roll <- c("BAM2_stirredupscream.roll",
+           "DRSP7_angirr.roll",
+           "DRSP4_anxious.roll",
+           "perceivedburden.roll",
+           "DRSP8_intconflict.roll",
+           "DRSP1_depblue.roll",
+           "DRSP2_hopeless.roll",
+           "DRSP16_overwhelm.roll",
+           "DRSP6_rejsens.roll",
+           "DRSP9_lessintmot.roll",
+           "DRSP3_worthguilt.roll",
+           "ASIQ9_wishdead.roll",
+           "SI.roll",
+           "SI_Final.roll") %>% noquote()
+
+
+```
+
+#test 2/10/23: create rolling average BEFORE means and deviations
+
+### *execute functions* \n
+#to get a list of all person means: \n
+paste0(outcomelist,".m") \n
+# to run create.deviation() one at a time. \n
+c2d <- create.deviation(c2d, wishsleep, wishsleep.m) \n
+#to run create.person.mean() one at a time. \n
+ c2d <- create.person.mean(c2d, ASIQ4_thoughtwhen, id)
+```{r}
+
+#create rolling averages on RAW variables
+for (i in suimed_varlist) {
+  suimeddata_cycleday <- create.3day.rolling.avg(suimeddata_cycleday, !!sym({{i}}))
+}
+
+  
+#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
+for (i in suimed_varlist.roll) {
+  suimeddata_cycleday <- create.person.mean(suimeddata_cycleday, !!sym({{i}}), id)
+}
+#execute for loop: run create.deviation() on everything in list
+for (i in suimed_varlist.roll) {
+  suimeddata_cycleday <- create.deviation(suimeddata_cycleday, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+
+
+```
+
+# rolling averages
+- by person (id) and daterated
+- smoothing over the person-centered values (original)
+- as of 2/20/23, created rolling averages of RAW data, then person-centered
+
+practice code:
+test <- suimeddata_cycleday %>%
+  select(id, daterated, hybridcycleday, SI, SI.m, SI.d) %>%
+  arrange(id, daterated) %>%
+  group_by(id) %>%
+  mutate(testrollsi = rollapply(SI.d, 3, mean, align="center", fill=NA))
+  
+  
+suimeddata_cycleday %>%
+  group_by(id) %>%
+  mutate(TESTdrsp1roll = rollapply(DRSP1_depblue.d, 3, mean, align="center", fill=NA)) %>% select(id, daterated, hybridcycleday, DRSP1_depblue, DRSP1_depblue.d, DRSP1_depblue.d.roll, TESTdrsp1roll)
+
+
+
+# SI by cycle phase
+```{r, echo=F}
+
+#mean by id
+suimeddata <- suimeddata %>%
+  group_by(id) %>%
+  mutate(SI_Final.m = mean(SI_Final, na.rm = TRUE),
+         SI.m = mean(SI, na.rm = TRUE))
+
+#person-mean-center by phase
+suimed_data_for_plot1a <- suimeddata %>% 
+  group_by(id, LH_cyclephasenames) %>% 
+  summarize(SI_Final.m=mean(SI_Final.m),
+            SI_Final.phase.m = mean(SI_Final, na.rm = TRUE),
+            SI_Final.phase.d = SI_Final.phase.m - SI_Final.m,
+            SI.m=mean(SI.m),
+            SI.phase.m = mean(SI, na.rm = TRUE),
+            SI.phase.d = SI.phase.m - SI.m)
+
+print(suimed_data_for_plot1a)
+
+PLOT1a <- suimed_data_for_plot1a %>% 
+  group_by(LH_cyclephasenames) %>%
+  summarize(grand.m.SI.d = mean(SI.phase.d, na.rm=T),
+            se=sd(SI.phase.d, na.rm=T)/sqrt(n())) %>%
+  ggplot(aes(x=LH_cyclephasenames, y=grand.m.SI.d))+
+  geom_line(group=1)+
+  scale_x_discrete(labels=c("midfol" = "Midfollicular", 
+                            "midlut" = "Midluteal",
+                            "earlylut" = "Early Luteal",
+                            "perimen" = "Perimenstrual",
+                            "periov" = "Periovulatory"))+
+  #scale_y_continuous(limits = c(-0.75, 0.5))+
+  geom_errorbar(aes(ymin=grand.m.SI.d-se, 
+                    ymax=grand.m.SI.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw(base_size = 11)+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered SI")
+
+print(PLOT1a)
+
+# PLOT1a %>% ggsave(filename = "2022-10-26 SI by cycle phase.png", 
+#                                                  width = 5, height = 3,
+#                                                  path = "../../../04_writing/",
+#                                                  units = c("in"),
+#                                                  device = "png")
+
+```
+
+# SI by cycle day
+```{r, echo=F}
+
+#mean by id
+suimeddata_cycleday <- suimeddata_cycleday %>%
+  group_by(id) %>%
+  mutate(SI_Final.roll.m = mean(SI_Final.roll, na.rm = TRUE),
+         SI.roll.m = mean(SI.roll, na.rm = TRUE))
+
+
+#person-mean-center
+suimed_data_for_plot1c <- suimeddata_cycleday %>% group_by(id, hybridcycleday) %>% 
+  filter(!is.na(hybridcycleday)) %>%
+  summarize(SI_Final.roll.m=mean(SI_Final.roll.m),
+            SI_Final.day.roll.m = mean(SI_Final.roll, na.rm = TRUE),
+            SI_Final.day.roll.d = SI_Final.day.roll.m - SI_Final.roll.m,
+            SI.roll.m=mean(SI.roll.m),
+            SI.day.roll.m = mean(SI.roll, na.rm = TRUE),
+            SI.day.roll.d = SI.day.roll.m - SI.roll.m) %>%
+  arrange(factor(hybridcycleday, levels = hybridcycleday_order))
+
+print(suimed_data_for_plot1c)
+
+#
+suimedPLOT1c <- 
+  suimeddata_cycleday %>% group_by(hybridcycleday) %>%
+  summarize(personcentered.dev = mean(SI.roll.d, na.rm=T),
+            se=sd(SI.roll.d, na.rm=T)/sqrt(n())) %>%
+  arrange(factor(hybridcycleday, levels = hybridcycleday_order)) %>%
+  ggplot(aes(x=factor(hybridcycleday, levels = hybridcycleday_order), y=personcentered.dev))+
+  geom_line(group=1)+
+  geom_hline(yintercept = 0, linetype="dashed", col="red")+
+  geom_errorbar(aes(ymin=personcentered.dev-se, ymax=personcentered.dev+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  scale_y_continuous(expand = c(0,0.005))+
+  theme_bw()+
+  xlab("Cycle Day (based on LH-surge and menses self-report)")+
+  ylab("Person-Centered SI")
+  # annotate("rect", ymin = -1.05, ymax = -0.95, xmin = "-7L", xmax = "-3L", alpha = .2)+
+  # annotate("text", x="-7L", y=-1, label="midfollicular", 
+  #          size=3, hjust=-0.25, fontface="italic")+
+  # annotate("rect", ymin = -1.05, ymax = -0.95, xmin = "-2L", xmax = "1L", alpha = .2)+
+  # annotate("text", x="-2L", y=-1, label="periovulatory", 
+  #          size=3, hjust=0, fontface="italic")+
+  # annotate("rect", ymin = -1.05, ymax = -0.95, xmin = "2L", xmax = "5L", alpha = .2)+
+  # annotate("text", x="2L", y=-1, label="early luteal", 
+  #          size=3, hjust=0, fontface="italic")+
+  # annotate("rect", ymin = -1.05, ymax = -0.95, xmin = "-9M", xmax = "-5M", alpha = .2)+
+  # annotate("text", x="-9M", y=-1, label="midluteal", 
+  #          size=3, hjust=-0.5, fontface="italic")+
+  # annotate("rect", ymin = -1.05, ymax = -0.95, xmin = "-3M", xmax = "2M", alpha = .2)+
+  # annotate("text", x="-3M", y=-1, label="perimenstrual", 
+  #          size=3, hjust=-0.15, fontface="italic")+
+  # annotate("text", x="0L", y=-1.08, label="*", size=8, color="blue")+
+  # annotate("text", x="1M", y=-1.08, label="*", size=8, color="blue")
+
+print(suimedPLOT1c)
+# RR_PLOT1cpersoncentered_by_day_roll %>% ggsave(filename = "2022-07-23_dd_by_day_roll_1c", 
+#                                                 width = 8, height = 3,
+#                                                 path = "../04_writing/2022-04-26 ACER R&R/",
+#                                                 units = c("in"),
+#                                                 device = "png")
+
+
+```
+
+# plot all predictors by cycle day
+```{r, echo=F}
+
+suimed_allpredictors_plot <- suimeddata_cycleday %>% relocate(ends_with(".roll.d")) %>%
+  pivot_longer(ends_with(".roll.d"),
+        names_to = "predictor",
+        values_to = "deviation") %>%
+  filter(predictor!="SI_Final.roll.d") %>%
+  filter(predictor!="SI.roll.d") %>%
+  filter(predictor!="ASIQ9_wishdead.roll.d") %>%
+  group_by(hybridcycleday, predictor) %>%
+  summarize(personcentered.dev = mean(deviation, na.rm=T),
+            se=sd(deviation, na.rm=T)/sqrt(n())) %>%
+  mutate(predictor = recode(predictor, 
+                            "BAM2_stirredupscream.roll.d" = "Agitation",
+                            "DRSP1_depblue.roll.d" = "Depression",
+                            "DRSP16_overwhelm.roll.d" = "Overwhelm",
+                            "DRSP2_hopeless.roll.d" = "Hopelessness",
+                            "DRSP3_worthguilt.roll.d" = "Worthlessness",
+                            "DRSP4_anxious.roll.d" = "Anxiety",
+                            "DRSP6_rejsens.roll.d" = "Rej. Sensitivity",
+                            "DRSP7_angirr.roll.d" = "Anger/Irritability",
+                            "DRSP8_intconflict.roll.d" = "Interpersonal Conflict",
+                            "perceivedburden.roll.d" = "Perc. Burdensomeness",
+                            "DRSP9_lessintmot.roll.d" = "Loss of Interest")) %>%
+  arrange(predictor,factor(hybridcycleday, levels = hybridcycleday_order)) %>%
+  group_by(predictor) %>%
+  #mutate(roll= rollapply(personcentered.dev, 3, 
+  #                       mean, align = "center", fill=NA)) %>%
+  ggplot(aes(x=factor(hybridcycleday, levels = hybridcycleday_order), y=personcentered.dev,
+             group=predictor, color=predictor, linetype=predictor))+
+  geom_line()+
+  geom_hline(yintercept = 0, linetype="dashed", col="gray")+
+  #geom_errorbar(aes(ymin=roll-se, ymax=roll+se), 
+  #              size=0.5, width=0.5, position=position_dodge())+
+  scale_y_continuous(limits = c(-0.2,0.15))+
+  theme_bw()+
+  xlab("Cycle Day (based on LH-surge and menses self-report)")+
+  ylab("Person-Centered Psychiatric Symptoms")+
+  ggtitle("Mean symptom fluctuations across the cycle")+
+  guides(linetype="none")+
+  labs(color = "")+
+  theme(legend.position = "right")
+
+suimed_allpredictors_plot %>% ggsave(filename = "2023-02-10 All Sx by Cycle Day.png", 
+                                                 width = 12, height = 5,
+                                                 path = "../../../04_writing/Figures/",
+                                                 units = c("in"),
+                                                 device = "png")
+  # annotate("rect", ymin = -.25, ymax = -.3, xmin = "-7L", xmax = "-3L", alpha = .2)+
+  # annotate("text", x="-5L", y=-0.28, label="MIDFOL", 
+  #          size=3, hjust=0.25, fontface="bold")+
+  # annotate("rect", ymin = -.25, ymax = -.3, xmin = "-2L", xmax = "1L", alpha = .2)+
+  # annotate("text", x="-2L", y=-0.28, label="PERIOV", 
+  #          size=3, hjust=0.1, fontface="bold")+
+  # annotate("rect", ymin = -.25, ymax = -.3, xmin = "2L", xmax = "5L", alpha = .2)+
+  # annotate("text", x="2L", y=-0.28, label="EARLY\n LUT", 
+  #          size=3, hjust=0, fontface="bold")+
+  # annotate("rect", ymin = -.25, ymax = -.3, xmin = "-9M", xmax = "-5M", alpha = .2)+
+  # annotate("text", x="-9M", y=-0.28, label="MIDLUT", 
+  #          size=3, hjust=-0.5, fontface="bold")+
+  # annotate("rect", ymin = -.25, ymax = -.3, xmin = "-3M", xmax = "2M", alpha = .2)+
+  # annotate("text", x="-3M", y=-0.28, label="PERIMENS", 
+  #          size=3, hjust=-0.15, fontface="bold")
+
+
+print(suimed_allpredictors_plot)
+
+# ggsave("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEARCOMBINED_projects/SUIMED/03_code_dataedits_output/2022-08-01 predictors by hybrid cycle phase plot v1.png", 
+#        suimed_allpredictors_plot,
+#          device = c("png"), width = 12, units = c("in"))
+
+```
+
+#plot only significant mediators by cycle day
+
+```{r}
+
+suimeddata_cycleday
+
+#suimed_mediators_plot <- 
+  suimeddata_cycleday %>% 
+    select(id, hybridcycleday, 
+           SI.d.roll, DRSP1_depblue.d.roll, DRSP2_hopeless.d.roll, DRSP9_lessintmot.d.roll, perceivedburden.d.roll) %>%
+  mutate(SI.d.roll = SI.d.roll*1.2) %>% #can remove this if want to keep SI on 1-4 scale, or keep *1.2 to change to 1-6 scale
+  relocate(ends_with(".d.roll")) %>%
+    select(id, hybridcycleday, ends_with(".d.roll")) %>%
+  pivot_longer(ends_with(".d.roll"),
+        names_to = "predictor",
+        values_to = "rollingdev") %>%
+  filter(predictor==c("SI.d.roll", "DRSP1_depblue.d.roll", "DRSP2_hopeless.d.roll",
+                      "DRSP9_lessintmot.d.roll", "perceivedburden.d.roll")) %>%
+  group_by(hybridcycleday, predictor) %>%
+  summarize(personcentered.rollingdev = mean(rollingdev, na.rm=T),
+            se=sd(rollingdev, na.rm=T)/sqrt(n())) %>%
+  mutate(predictor = recode(predictor, 
+                            "DRSP1_depblue.d.roll" = "Depression",
+                            "DRSP2_hopeless.d.roll" = "Hopelessness",
+                            "perceivedburden.d.roll" = "Perc. Burdensomeness",
+                            "DRSP9_lessintmot.d.roll" = "Less Interest/Motivation",
+                            "SI.d.roll" = "SI")) %>%
+  arrange(predictor,factor(hybridcycleday, levels = hybridcycleday_order)) %>%
+  group_by(predictor) %>%
+  ggplot(aes(x=factor(hybridcycleday, levels = hybridcycleday_order), y=personcentered.rollingdev,
+             group=predictor, color=predictor,  size=predictor, alpha=predictor))+
+  geom_line()+
+  geom_hline(yintercept = 0, linetype="dashed", col="gray")+
+  #geom_errorbar(aes(ymin=roll-se, ymax=roll+se), 
+  #              size=0.5, width=0.5, position=position_dodge())+
+  #scale_y_continuous(limits = c(-0.18,0.15))+
+  scale_y_continuous(expand = c(0,0.075))+
+  #scale_linetype_manual(values=c("longdash", "dotdash", "dashed", "dotted", "solid"), guide="none")+
+  #scale_color_manual(values=c("#F8766D", "#A3A500", "#00Bf7D", "#00B0F6", "black"))+
+  scale_color_manual(values=c("#b3cde0", "#568c5b", "#f56f50", "#f0c75e", "black"))+
+  scale_size_manual(values=c(0.75, 0.75, 0.75, 0.75, 1.5), guide="none")+
+  scale_alpha_manual(values=c(0.5,0.5,0.5,0.5,1), guide="none")+
+  theme_bw()+
+  xlab("Cycle Day (based on LH-surge and menses self-report)")+
+  ylab("Person-Centered Affective Variables")+
+  labs(color = "")+
+  theme(legend.position = "bottom")
+
+```
+
+
+# RAINCLOUD PLOTS FOR RANDOM EFFECTS
+
+Code based on: https://www.cedricscherer.com/2021/06/06/visualizing-distributions-with-raincloud-plots-and-how-to-create-them-with-ggplot2/
+
+### step 1: import random effects via For Loop
+```{r, warning=F, results='hide', message=FALSE, }
+
+filenames <- list.files("AIM 2 Correct Raincloud Plots/", pattern = "*.csv")
+
+setwd("../AIM 2 RAINCLOUD PLOTS/AIM 2 Correct Raincloud Plots/")
+for (i in filenames) {
+  name <- paste("data_random", 
+                str_remove(i, ".csv"), 
+                sep = "_")
+  assign(name, read_csv(i))
+}
+
+```
+
+
+
+### Step 2: function to clean and merge random effects across reference groups
+```{r, results='hide'}
+
+prep_random_for_raincloud <- function (var, df1, df2, df3, df4) {
+  
+  var_RANDOM_MidFol <- paste0(noquote(var), "_RANDOM_MidFol")
+  var_RANDOM_MidLut <- paste0(noquote(var), "_RANDOM_MidLut")
+  var_RANDOM_Periov <- paste0(noquote(var), "_RANDOM_Periov")
+  var_RANDOM_EarlyLut <- paste0(noquote(var), "_RANDOM_EarlyLut")
+  var_RANDOM_perimens <- paste0(noquote(var), "_RANDOM_Perimens")
+  
+  df1 <- df1 %>%
+    select(c(ID, contains("RANDOM"))) %>%
+    select(-c(ends_with("_SE"))) %>%
+    relocate(ID, 
+           all_of(var_RANDOM_MidFol),
+           all_of(var_RANDOM_Periov),
+           all_of(var_RANDOM_EarlyLut),
+           all_of(var_RANDOM_MidLut)) %>%
+  #rename the predictor variables to denote what their reference group is
+  rename(perimens_v_midfol = var_RANDOM_MidFol,
+         perimens_v_periov = var_RANDOM_Periov,
+         perimens_v_earlylut = var_RANDOM_EarlyLut,
+         perimens_v_midlut = var_RANDOM_MidLut) %>%
+   #just want 1 fixed effect per person (these were copied down for each daily rating)
+  group_by(ID) %>% slice(n=1) %>%
+  #MANUALLY add the fixed effect from the model to each random effect as a new variable
+  mutate(perimens_v_midfol_plusfixed = perimens_v_midfol,
+         perimens_v_periov_plusfixed = perimens_v_periov,
+         perimens_v_earlylut_plusfixed = perimens_v_earlylut,
+         perimens_v_midlut_plusfixed = perimens_v_midlut)
+
+##ref group B: midluteal
+#remove duplicates/extraneous
+#--> note here that the duplicate contrast we are removing is because already got "perimens vs midluteal" with perimens as reference group, so we don't need "midlut vs perimens"
+  df2 <- df2 %>%
+    select(c(ID, contains("RANDOM"))) %>%
+    select(-c(ends_with("_SE"))) %>%
+    relocate(ID, 
+           all_of(var_RANDOM_MidFol),
+           all_of(var_RANDOM_Periov),
+           all_of(var_RANDOM_EarlyLut)) %>%
+  rename(midlut_v_midfol = var_RANDOM_MidFol,
+         midlut_v_periov = var_RANDOM_Periov,
+         midlut_v_earlylut = var_RANDOM_EarlyLut) %>%
+  group_by(ID) %>% slice(n=1) %>%
+  mutate(midlut_v_midfol_plusfixed = midlut_v_midfol,
+         midlut_v_periov_plusfixed = midlut_v_periov,
+         midlut_v_earlylut_plusfixed = midlut_v_earlylut)
+
+##ref group C: early luteal
+  df3 <- df3 %>%
+    select(c(ID, contains("RANDOM"))) %>%
+    select(-c(ends_with("_SE"))) %>%
+    relocate(ID, 
+           all_of(var_RANDOM_MidFol),
+           all_of(var_RANDOM_Periov)) %>%
+  rename(earlylut_v_midfol = var_RANDOM_MidFol,
+         earlylut_v_periov = var_RANDOM_Periov) %>%
+  group_by(ID) %>% slice(n=1) %>%
+  mutate(earlylut_v_midfol_plusfixed = earlylut_v_midfol,
+         earlylut_v_periov_plusfixed = earlylut_v_periov)
+
+##ref group D: periov
+#remove duplicates/extraneous
+  df4 <- df4 %>%
+    select(c(ID, contains("RANDOM"))) %>%
+    select(-c(ends_with("_SE"))) %>%
+    relocate(ID, 
+           all_of(var_RANDOM_MidFol)) %>%
+  rename(periov_v_midfol = var_RANDOM_MidFol) %>%
+  group_by(ID) %>% slice(n=1) %>%
+  mutate(periov_v_midfol_plusfixed = periov_v_midfol)
+  
+  interim_random_AB <- full_join(df1, df2, by="ID")
+  interim_random_ABC <- full_join(interim_random_AB, df3, by="ID")
+  interim_random_ABCD <- full_join(interim_random_ABC, df4, by="ID")
+
+}
+
+
+
+```
+
+### Step 3: Function to make raincloud plot for any outcome
+```{r}
+plot_suimed_raincloud <- function (cleaned_df, var) {
+  cleaned_df %>%
+  #pivoting is necessary to get ALL random effects as one variable, rather than 6 columns
+  pivot_longer(
+    cols = ends_with("plusfixed"),
+    names_to = "pairwise",
+    values_to = "randomeffect") %>%
+  #aesthetics will be your new pivoted columns
+  ggplot(aes(x=pairwise, y=randomeffect, color=pairwise))+
+  #boxplot!
+  geom_boxplot(fill=NA,
+                width = 0.2,
+                outlier.color = NA)+
+  #half histogram1
+  ggdist::stat_halfeye(aes(fill=pairwise), 
+                       adjust = 0.5, width=0.6, justification=-0.3, .width = 0, point_colour=NA)+
+  #scatter!
+  geom_point(size=1,alpha=0.2, position = position_jitter(seed=1, width = 0.1))+
+  #everything from here down is just formatting and labeling
+  scale_color_discrete(guide="none")+
+  scale_fill_discrete(name="Cycle Phase Contrast",
+                      limits = c("earlylut_v_midfol_plusfixed",
+                                 "earlylut_v_periov_plusfixed",
+                                 "midlut_v_earlylut_plusfixed",
+                                 "midlut_v_midfol_plusfixed",
+                                 "midlut_v_periov_plusfixed",
+                                 "perimens_v_earlylut_plusfixed",
+                                 "perimens_v_midfol_plusfixed",
+                                 "perimens_v_midlut_plusfixed",
+                                 "perimens_v_periov_plusfixed",
+                                 "periov_v_midfol_plusfixed"),
+                      labels=c("E.LUT vs MIDFOL",
+                               "E. LUT vs PERIOV",
+                               "MIDLUT vs E.LUT",
+                               "MIDLUT vs MIDFOL",
+                               "MIDLUT vs PERIOV",
+                               "PERIMENS vs E.LUT",
+                               "PERIMENS vs MIDFOL",
+                               "PERIMENS vs MIDLUT",
+                               "PERIMENS vs PERIOV",
+                               "PERIOV vs MIDFOL"))+
+  coord_cartesian(xlim=c(1.2, NA), clip = "off")+
+  theme_bw()+
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank())+
+  ylab("Fixed + Random Effect")+
+  ggtitle(paste0("individual differences of cycle phase on ", var))+
+  labs(fill="Cycle Phase Contrast")+
+  geom_hline(yintercept = 0, linetype="dashed", color="gray")
+}
+```
+
+## RUN *prep_random_for_raincloud()* function on all items
+*MANUAL ENTERING OF FIXED EFFECTS*:\n
+F1 perimens_v_midfol
+F2 perimens_v_periov
+F3 perimens_v_earlylut
+F4 perimens_v_midlut
+F5 midlut_v_midfol
+F6 midlut_v_periov
+F7 midlut_v_earlylut
+F8 earlylut_v_midfol
+F9 earlylut_v_periov
+F10 periov_v_midfol
+```{r, echo=T}
+
+data_random_cleaned_SI <- prep_random_for_raincloud("SI", 
+                                                   data_random_SIA,
+                                                   data_random_SIB,
+                                                   data_random_SIC,
+                                                   data_random_SID)
+
+data_random_cleaned_DEP <- prep_random_for_raincloud("depression", 
+                                                   data_random_DepressionA, 
+                                                   data_random_DepressionB, 
+                                                   data_random_DepressionC, 
+                                                   data_random_DepressionD)
+
+data_random_cleaned_HOPE <- prep_random_for_raincloud("hopeless", 
+                                                   data_random_HopelessA,
+                                                   data_random_HopelessB,
+                                                   data_random_HopelessC,
+                                                   data_random_HopelessD)
+
+data_random_cleaned_ANX <- prep_random_for_raincloud("anxiety", 
+                                                   data_random_AnxietyA,
+                                                   data_random_AnxietyB,
+                                                   data_random_AnxietyC,
+                                                   data_random_AnxietyD)
+
+data_random_cleaned_OVWH <- prep_random_for_raincloud("overwhelm", 
+                                                   data_random_OverwhelmA, 
+                                                   data_random_OverwhelmB, 
+                                                   data_random_OverwhelmC, 
+                                                   data_random_OverwhelmD)
+
+# data_random_cleaned_AGIT <- prep_random_for_raincloud("AGIT", 
+#                                                    data_random_AgitationA, 
+#                                                    data_random_AgitationB, 
+#                                                    data_random_AgitationC, 
+#                                                    data_random_AgitationD)
+
+
+data_random_cleaned_LESSINT <- prep_random_for_raincloud("interest", 
+                                                   data_random_InterestA,
+                                                   data_random_InterestB,
+                                                   data_random_InterestC, 
+                                                   data_random_InterestD)
+
+data_random_cleaned_WORTH <- prep_random_for_raincloud("worthless", 
+                                                   data_random_WorthlessA, 
+                                                   data_random_WorthlessB, 
+                                                   data_random_WorthlessC, 
+                                                   data_random_WorthlessD)
+
+data_random_cleaned_REJSENS <- prep_random_for_raincloud("rejesen", 
+                                                   data_random_RejSenA, 
+                                                   data_random_RejSenB, 
+                                                   data_random_RejSenC, 
+                                                   data_random_RejSenD)
+
+data_random_cleaned_ANGER <- prep_random_for_raincloud("anger", 
+                                                   data_random_AngerA,
+                                                   data_random_AngerB, 
+                                                   data_random_AngerC, 
+                                                   data_random_AngerD)
+
+ data_random_cleaned_BURDEN <- prep_random_for_raincloud("burden", 
+                                                    data_random_BurdenA,
+                                                    data_random_BurdenB, 
+                                                    data_random_BurdenC, 
+                                                    data_random_BurdenD)
+
+data_random_cleaned_CONFLICT <- prep_random_for_raincloud("conflict", 
+                                                   data_random_ConflictA, 
+                                                   data_random_ConflictB, 
+                                                   data_random_ConflictC,
+                                                   data_random_ConflictD)
+
+```
+
+### run *plot_suimed_raincloud()* function on each cleaned random effects set
+```{r}
+
+print(plot_suimed_raincloud(data_random_cleaned_DEP, "depression"))
+print(plot_suimed_raincloud(data_random_cleaned_ANX, "anxiety"))
+print(plot_suimed_raincloud(data_random_cleaned_HOPE, "hopelessness"))
+print(plot_suimed_raincloud(data_random_cleaned_SI, "SI"))
+print(plot_suimed_raincloud(data_random_cleaned_OVWH, "overwhelm"))
+print(plot_suimed_raincloud(data_random_cleaned_LESSINT, "less interest"))
+print(plot_suimed_raincloud(data_random_cleaned_WORTH, "worthlessness"))
+print(plot_suimed_raincloud(data_random_cleaned_REJSENS, "rejection sensitivity"))
+print(plot_suimed_raincloud(data_random_cleaned_ANGER, "anger"))
+print(plot_suimed_raincloud(data_random_cleaned_CONFLICT, "conflict"))
+print(plot_suimed_raincloud(data_random_cleaned_BURDEN, "burden"))
+
+#come back to agitation later - not working
+#print(plot_suimed_raincloud(data_random_cleaned_AGIT, "agitation"))
+
+```
+### tweak to improve clarity (using etoh paper code for rotating 90 degrees and grouping)
+```{r}
+
+RE_DEP_READYTOPLOT <- data_random_cleaned_DEP %>%
+  rename(
+    "1A) PERIMENS vs MIDFOL" = perimens_v_midfol_plusfixed,
+    "1A) PERIMENS vs PERIOV" = perimens_v_periov_plusfixed,
+    "1A) PERIMENS vs E. LUT" = perimens_v_earlylut_plusfixed,
+    "1A) PERIMENS vs MIDLUT" = perimens_v_midlut_plusfixed,
+    "1B) MIDLUT vs MIDFOL" = midlut_v_midfol_plusfixed,
+    "1B) MIDLUT vs PERIOV" = midlut_v_periov_plusfixed,
+    "1B) MIDLUT vs E. LUT" = midlut_v_earlylut_plusfixed,
+    "1C) E. LUT vs MIDFOL" = earlylut_v_midfol_plusfixed,
+    "1C) E. LUT vs PERIOV" = earlylut_v_periov_plusfixed,
+    "1D) PERIOV vs MIDFOL" = periov_v_midfol_plusfixed) %>%
+  select(-c(starts_with("periov"), starts_with("perimens"), 
+            starts_with("midlut"), starts_with("earlylut"),
+            starts_with("depression")))
+
+grouped_colors <- c("1A) PERIMENS vs MIDFOL" = "darkseagreen",
+                    "1A) PERIMENS vs PERIOV" = "darkseagreen",
+                    "1A) PERIMENS vs E. LUT" = "darkseagreen",
+                    "1A) PERIMENS vs MIDLUT" = "darkseagreen",
+                    "1B) MIDLUT vs MIDFOL" = "firebrick",
+                    "1B) MIDLUT vs PERIOV" = "firebrick",
+                    "1B) MIDLUT vs E. LUT" = "firebrick",
+                    "1C) E. LUT vs MIDFOL" = "deepskyblue2",
+                    "1C) E. LUT vs PERIOV" = "deepskyblue2",
+                    "1D) PERIOV vs MIDFOL" = "goldenrod3")
+
+RE_DEP_READYTOPLOT <- RE_DEP_READYTOPLOT %>%
+  pivot_longer(
+    cols = starts_with("1"),
+    names_to = "pairwise",
+    values_to = "randomeffect") %>%
+  mutate(pairwise_numeric = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ 10,
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ 9,
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ 8,
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ 7,
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ 6,
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ 5,
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ 4,
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ 3,
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ 2,
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ 1),
+         
+         referencegroup = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ "perimens",
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ "midlut",
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ "e.lut",
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ "e.lut",
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ "periov"),
+
+                  contrastgroup = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ "midfol",
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ "periov",
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ "e.lut",
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ "midfol",
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ "periov",
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ "e.lut",
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ "midfol",
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ "periov",
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ "midfol"))
+
+RE_DEP_READYTOPLOT$referencegroup <- as.factor(RE_DEP_READYTOPLOT$referencegroup)
+RE_DEP_READYTOPLOT$contrastgroup <- as.factor(RE_DEP_READYTOPLOT$contrastgroup)
+RE_DEP_READYTOPLOT$pairwise_numeric <- as.numeric(RE_DEP_READYTOPLOT$pairwise_numeric)
+  
+rotated_raincloud_dep <- RE_DEP_READYTOPLOT %>%
+  ggplot(aes(y=pairwise_numeric, x=randomeffect, color=pairwise, fill=pairwise))+
+   geom_boxplot(fill=NA,width = 0.2,outlier.color = NA)+
+  ggdist::stat_halfeye(adjust = 0.5, width=0.6, justification=-0.2, .width = 0, point_colour=NA)+
+  scale_color_manual(values = grouped_colors)+
+  scale_fill_manual(values=grouped_colors)+
+  scale_y_continuous(breaks = c(1:10),
+    labels = c("PERIOV", 
+               "E.LUT", "E.LUT", 
+               "MIDLUT", "MIDLUT", "MIDLUT",
+               "PERIMENS", "PERIMENS", "PERIMENS", "PERIMENS"),
+    name = "Reference",
+    sec.axis = sec_axis(~., breaks = c(1:10),
+                        labels=c("MIDFOL", 
+                                 "PERIOV", "MIDFOL", 
+                                 "E.LUT", "PERIOV", "MIDFOL",
+                                 "MIDLUT", "E.LUT", "PERIOV", "MIDFOL"),
+                        name = "Contrast"))+
+  theme_bw()+
+  theme(legend.position = "none", axis.text = element_text(size = 13), axis.title = element_text(size=16))+
+  xlab("Distribution of Fixed+Random Effects")+
+  geom_vline(xintercept = 0, linetype="dashed", color="gray50")
+
+ggsave("ROTATE_dep_test.png",
+       plot = rotated_raincloud_dep,
+         device = "png",
+         path = "../04_writing/Figures/",
+         width = 7, height = 9, units = c("in"))
+
+```
+
+### repeat last block on hopelessness
+
+```{r}
+
+RE_HOPE_READYTOPLOT <- data_random_cleaned_HOPE %>%
+  rename(
+    "1A) PERIMENS vs MIDFOL" = perimens_v_midfol_plusfixed,
+    "1A) PERIMENS vs PERIOV" = perimens_v_periov_plusfixed,
+    "1A) PERIMENS vs E. LUT" = perimens_v_earlylut_plusfixed,
+    "1A) PERIMENS vs MIDLUT" = perimens_v_midlut_plusfixed,
+    "1B) MIDLUT vs MIDFOL" = midlut_v_midfol_plusfixed,
+    "1B) MIDLUT vs PERIOV" = midlut_v_periov_plusfixed,
+    "1B) MIDLUT vs E. LUT" = midlut_v_earlylut_plusfixed,
+    "1C) E. LUT vs MIDFOL" = earlylut_v_midfol_plusfixed,
+    "1C) E. LUT vs PERIOV" = earlylut_v_periov_plusfixed,
+    "1D) PERIOV vs MIDFOL" = periov_v_midfol_plusfixed) %>%
+  select(-c(starts_with("periov"), starts_with("perimens"), 
+            starts_with("midlut"), starts_with("earlylut"),
+            starts_with("hopeless")))
+
+RE_HOPE_READYTOPLOT <- RE_HOPE_READYTOPLOT %>%
+  pivot_longer(
+    cols = starts_with("1"),
+    names_to = "pairwise",
+    values_to = "randomeffect") %>%
+  mutate(pairwise_numeric = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ 10,
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ 9,
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ 8,
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ 7,
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ 6,
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ 5,
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ 4,
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ 3,
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ 2,
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ 1),
+         
+         referencegroup = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ "perimens",
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ "midlut",
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ "e.lut",
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ "e.lut",
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ "periov"),
+
+                  contrastgroup = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ "midfol",
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ "periov",
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ "e.lut",
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ "midfol",
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ "periov",
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ "e.lut",
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ "midfol",
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ "periov",
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ "midfol"))
+
+RE_HOPE_READYTOPLOT$referencegroup <- as.factor(RE_HOPE_READYTOPLOT$referencegroup)
+RE_HOPE_READYTOPLOT$contrastgroup <- as.factor(RE_HOPE_READYTOPLOT$contrastgroup)
+RE_HOPE_READYTOPLOT$pairwise_numeric <- as.numeric(RE_HOPE_READYTOPLOT$pairwise_numeric)
+  
+rotated_raincloud_hopeless <- RE_HOPE_READYTOPLOT %>%
+  ggplot(aes(y=pairwise_numeric, x=randomeffect, color=pairwise, fill=pairwise))+
+   geom_boxplot(fill=NA,width = 0.2,outlier.color = NA)+
+  ggdist::stat_halfeye(adjust = 0.5, width=0.6, justification=-0.2, .width = 0, point_colour=NA)+
+  scale_color_manual(values = grouped_colors)+
+  scale_fill_manual(values=grouped_colors)+
+  scale_y_continuous(breaks = c(1:10),
+    labels = c("PERIOV", 
+               "E.LUT", "E.LUT", 
+               "MIDLUT", "MIDLUT", "MIDLUT",
+               "PERIMENS", "PERIMENS", "PERIMENS", "PERIMENS"),
+    name = "Reference Group",
+    sec.axis = sec_axis(~., breaks = c(1:10),
+                        labels=c("MIDFOL", 
+                                 "PERIOV", "MIDFOL", 
+                                 "E.LUT", "PERIOV", "MIDFOL",
+                                 "MIDLUT", "E.LUT", "PERIOV", "MIDFOL"),
+                        name = "Contrast Group"))+
+  theme_bw()+
+  theme(legend.position = "none", axis.text = element_text(size = 13), axis.title = element_text(size=16))+
+  xlab("Distribution of Fixed+Random Effects")+
+  geom_vline(xintercept = 0, linetype="dashed", color="gray50")
+
+ggsave("ROTATE_hopeless_test.png",
+       plot = rotated_raincloud_hopeless,
+         device = "png",
+         path = "../04_writing/Figures/",
+         width = 7, height = 9, units = c("in"))
+```
+
+#try to make function to make a rotated color coded plot for every outcome
+```{r}
+
+plot_suimed_raincloud_rotated <- function (cleaned_df, cleaned_df_new, var) {
+    cleaned_df_new  <- cleaned_df %>%
+  rename(
+    "1A) PERIMENS vs MIDFOL" = perimens_v_midfol_plusfixed,
+    "1A) PERIMENS vs PERIOV" = perimens_v_periov_plusfixed,
+    "1A) PERIMENS vs E. LUT" = perimens_v_earlylut_plusfixed,
+    "1A) PERIMENS vs MIDLUT" = perimens_v_midlut_plusfixed,
+    "1B) MIDLUT vs MIDFOL" = midlut_v_midfol_plusfixed,
+    "1B) MIDLUT vs PERIOV" = midlut_v_periov_plusfixed,
+    "1B) MIDLUT vs E. LUT" = midlut_v_earlylut_plusfixed,
+    "1C) E. LUT vs MIDFOL" = earlylut_v_midfol_plusfixed,
+    "1C) E. LUT vs PERIOV" = earlylut_v_periov_plusfixed,
+    "1D) PERIOV vs MIDFOL" = periov_v_midfol_plusfixed) %>%
+  select(-c(starts_with("periov"), starts_with("perimens"), 
+            starts_with("midlut"), starts_with("earlylut"),
+            starts_with("{{var}}")))
+    
+    cleaned_df_new <- cleaned_df_new %>%
+  pivot_longer(
+    cols = starts_with("1"),
+    names_to = "pairwise",
+    values_to = "randomeffect") %>%
+  mutate(pairwise_numeric = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ 10,
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ 9,
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ 8,
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ 7,
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ 6,
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ 5,
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ 4,
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ 3,
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ 2,
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ 1),
+         
+         referencegroup = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ "perimens",
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ "perimens",
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ "midlut",
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ "e.lut",
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ "e.lut",
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ "periov"),
+         
+         contrastgroup = case_when(pairwise=="1A) PERIMENS vs MIDFOL" ~ "midfol",
+                                      pairwise=="1A) PERIMENS vs PERIOV" ~ "periov",
+                                      pairwise=="1A) PERIMENS vs E. LUT" ~ "e.lut",
+                                      pairwise=="1A) PERIMENS vs MIDLUT" ~ "midlut",
+                                      pairwise=="1B) MIDLUT vs MIDFOL" ~ "midfol",
+                                      pairwise=="1B) MIDLUT vs PERIOV" ~ "periov",
+                                      pairwise=="1B) MIDLUT vs E. LUT" ~ "e.lut",
+                                      pairwise=="1C) E. LUT vs MIDFOL" ~ "midfol",
+                                      pairwise=="1C) E. LUT vs PERIOV" ~ "periov",
+                                      pairwise=="1D) PERIOV vs MIDFOL" ~ "midfol"))
+    
+    cleaned_df_new$referencegroup <- as.factor(cleaned_df_new$referencegroup)
+    
+    cleaned_df_new$contrastgroup <- as.factor(cleaned_df_new$contrastgroup)
+    cleaned_df_new$pairwise_numeric <- as.numeric(cleaned_df_new$pairwise_numeric)
+    
+    rotated_raincloud_var <- cleaned_df_new %>%
+      ggplot(aes(y=pairwise_numeric, x=randomeffect, color=pairwise, fill=pairwise))+
+      geom_boxplot(fill=NA,width = 0.2,outlier.color = NA)+
+      ggdist::stat_halfeye(adjust = 0.5, width=0.6, justification=-0.2, .width = 0, point_colour=NA)+
+      scale_color_manual(values = grouped_colors)+
+      scale_fill_manual(values=grouped_colors)+
+      scale_y_continuous(breaks = c(1:10),
+                         labels = c("PERIOV",
+                                    "E.LUT", "E.LUT",
+                                    "MIDLUT", "MIDLUT", "MIDLUT",
+                                    "PERIMENS", "PERIMENS", "PERIMENS", "PERIMENS"),
+                         name = "Reference",
+                         sec.axis = sec_axis(~., breaks = c(1:10),
+                                             labels=c("MIDFOL",
+                                                      "PERIOV", "MIDFOL",
+                                                      "E.LUT", "PERIOV", "MIDFOL",
+                                                      "MIDLUT", "E.LUT", "PERIOV", "MIDFOL"),
+                                             name = "Contrast"))+
+      theme_bw()+
+      theme(legend.position = "none", axis.text = element_text(size = 13), axis.title = element_text(size=16))+
+      xlab("Distribution of Fixed+Random Effects")+
+      ggtitle(var)+
+      geom_vline(xintercept = 0, linetype="dashed", color="gray50")
+    
+    print(rotated_raincloud_var)
+    
+    ggsave(paste0(var,"_randomeffects_ROTATED.png"),
+           plot = rotated_raincloud_var,
+         device = "png",
+         path = "../../../04_writing/Figures/2023-02-10 Figures/",
+         width = 7, height = 9, units = c("in"))
+    
+}
+
+```
+
+# run plot function on all outcomes
+```{r}
+
+plot_suimed_raincloud_rotated(data_random_cleaned_DEP, DEP_toplot, "depression")
+plot_suimed_raincloud_rotated(data_random_cleaned_HOPE, HOPELESS_toplot, "hopeless")
+plot_suimed_raincloud_rotated(data_random_cleaned_ANGER, ANGER_toplot, "anger")
+plot_suimed_raincloud_rotated(data_random_cleaned_ANX, ANX_toplot, "anxiety")
+plot_suimed_raincloud_rotated(data_random_cleaned_BURDEN, BURDEN_toplot, "burden")
+plot_suimed_raincloud_rotated(data_random_cleaned_CONFLICT, CONFLICT_toplot, "conflict")
+plot_suimed_raincloud_rotated(data_random_cleaned_LESSINT, LESSINT_toplot, "interest")
+plot_suimed_raincloud_rotated(data_random_cleaned_OVWH, OVWH_toplot, "overwhelm")
+plot_suimed_raincloud_rotated(data_random_cleaned_REJSENS, REJSENS_toplot, "rejesen")
+plot_suimed_raincloud_rotated(data_random_cleaned_WORTH, WORTHLESS_toplot, "worthless")
+
+plot_suimed_raincloud_rotated(data_random_cleaned_SI, HOPELESS_toplot, "SI")
+
+
+```
+
+
+```{r}
+knitr::knit_exit()
+```
+
+
+#TROUBLESHOOTING
+minitest <- function (var, 
+                     df1) {
+  var_RANDOM_Midfol <- paste0(noquote(var), "_RANDOM_Midfol")
+  var_RANDOM_Periov <- paste0(noquote(var), "_RANDOM_Periov")
+  var_RANDOM_EarlyLut <- paste0(noquote(var), "_RANDOM_EarlyLut")
+  var_RANDOM_Perimens <- paste0(noquote(var), "_RANDOM_Perimens")
+  df1 <- df1 %>%
+    select(c(ID, contains("RANDOM"))) %>%
+  select(-c(ends_with("_SE"))) %>%
+  relocate(ID, 
+           all_of(var_RANDOM_Midfol),
+           all_of(var_RANDOM_Periov),
+           all_of(var_RANDOM_EarlyLut))
+  }
+
+print(minitest("HOPE", data_random_HOPELESSA
+         ))
+
+
+suimed_outcomes <- c("AGITATION",
+                   "ANGER",
+                   "ANXIETY",
+                   "PERCEIVEDBURDEN",
+                   "DEPRESSION",
+                   "INTCONFLICT",
+                   "HOPELESSNESS",
+                   "LESSINTEREST",
+                   "REJSENS",
+                   "WORTHLESS",
+                   "SI_Final") %>% noquote()
+
+testsuimedoutcomes <- c("DEPRESSION") %>% noquote()
+
+
+
+
+```{r}
+
+data_random_cleaned_SI %>%
+  #pivoting is necessary to get ALL random effects as one variable, rather than 6 columns
+  pivot_longer(
+    cols = ends_with("plusfixed"),
+    names_to = "pairwise",
+    values_to = "randomeffect") %>%
+  #aesthetics will be your new pivoted columns
+  ggplot(aes(x=pairwise, y=randomeffect, color=pairwise))+
+  #boxplot!
+  geom_boxplot(fill=NA,
+                width = 0.2,
+                outlier.color = NA)+
+  #half histogram1
+  ggdist::stat_halfeye(aes(fill=pairwise))+
+  #scatter!
+  geom_point(size=1,alpha=0.2, position = position_jitter(seed=1, width = 0.1))
+
+#checking why it seems cut off at the bottom
+data_random_cleaned_SI %>% filter(perimens_v_periov_plusfixed <= -2) %>% select(perimens_v_periov_plusfixed)
+
+```
+
+```{r}
+
+print(plot_suimed_raincloud(data_random_cleaned_DEP, "depression"))
+
+```
+
+#run plot code on all items
+
+
+
+====archive====
+### below codeis to do one rain cloud plot by hand
+
+#step 1. data
+```{r}
+data_randomeffects_DepA <- read_csv("JACKIE SUIC MED raincloud plots/AIM 2 RAINCLOUD PLOTS/Aim 2 Random Effects Files for Plots (For Jordan)/DEPA.csv")
+data_randomeffects_DepB <- read_csv("JACKIE SUIC MED raincloud plots/AIM 2 RAINCLOUD PLOTS/Aim 2 Random Effects Files for Plots (For Jordan)/DEPB.csv")
+data_randomeffects_DepC <- read_csv("JACKIE SUIC MED raincloud plots/AIM 2 RAINCLOUD PLOTS/Aim 2 Random Effects Files for Plots (For Jordan)/DEPC.csv")
+data_randomeffects_DepD <- read_csv("JACKIE SUIC MED raincloud plots/AIM 2 RAINCLOUD PLOTS/Aim 2 Random Effects Files for Plots (For Jordan)/DEPD.csv")
+```
+
+
+#Step 2. Clean your random effects dataset
+```{r}
+
+##ref group A: perimenstrual
+#remove duplicates/extraneous
+data_randomeffects_DepA <- data_randomeffects_DepA %>%
+  select(-c(DEPRESSION, starts_with("LH_"),
+            ends_with("_SE"))) %>%
+  relocate(ID, DEP_RANDOM_Midfol, DEP_RANDOM_Periov, DEP_RANDOM_EarlyLut, DEP_RANDOM_MidLut) %>%
+  #rename the predictor variables to denote what their reference group is
+  rename(perimens_v_midfol = DEP_RANDOM_Midfol,
+         perimens_v_periov = DEP_RANDOM_Periov,
+         perimens_v_earlylut = DEP_RANDOM_EarlyLut,
+         perimens_v_midlut = DEP_RANDOM_MidLut) %>%
+   #just want 1 fixed effect per person (these were copied down for each daily rating)
+  group_by(ID) %>% slice(n=1) %>%
+  #MANUALLY add the fixed effect from the model to each random effect as a new variable
+  mutate(perimens_v_midfol_plusfixed = perimens_v_midfol-0.274,
+         perimens_v_periov_plusfixed = perimens_v_periov-0.245,
+         perimens_v_earlylut_plusfixed = perimens_v_earlylut-0.295,
+         perimens_v_midlut_plusfixed = perimens_v_midlut-0.087)
+
+##ref group B: midluteal
+#remove duplicates/extraneous
+#--> note here that the duplicate contrast we are removing is because already got "perimens vs midluteal" with perimens as reference group, so we don't need "midlut vs perimens"
+data_randomeffects_DepB <- data_randomeffects_DepB %>%
+  select(-c(DEPRESSION, starts_with("LH_"), 
+            ends_with("_SE"),
+            DEP_RANDOM_perimen, DEP_RANDOM_perimen_SE)) %>%
+  relocate(ID, DEP_RANDOM_Midfol, DEP_RANDOM_Periov, DEP_RANDOM_EarlyLut) %>%
+  #rename the predictor variables to denote what their reference group is
+  rename(midlut_v_midfol = DEP_RANDOM_Midfol,
+         midlut_v_periov = DEP_RANDOM_Periov,
+         midlut_v_earlylut = DEP_RANDOM_EarlyLut) %>%
+   #just want 1 fixed effect per person (these were copied down for each daily rating)
+  group_by(ID) %>% slice(n=1) %>%
+  #MANUALLY add the fixed effect from the model to each random effect as a new variable
+  mutate(midlut_v_midfol_plusfixed = midlut_v_midfol-0.187,
+         midlut_v_periov_plusfixed = midlut_v_periov-0.158,
+         midlut_v_earlylut_plusfixed = midlut_v_earlylut-0.208)
+
+##ref group C: early luteal
+#remove duplicates/extraneous
+data_randomeffects_DepC <- data_randomeffects_DepC %>%
+  select(-c(DEPRESSION, starts_with("LH_"), 
+            ends_with("_SE"),
+            DEP_RANDOM_perimen, DEP_RANDOM_perimen_SE,
+            DEP_RANDOM_MidLut, DEP_RANDOM_Midlut_SE)) %>%
+  relocate(ID, DEP_RANDOM_Midfol, DEP_RANDOM_Periov) %>%
+  #rename the predictor variables to denote what their reference group is
+  rename(earlylut_v_midfol = DEP_RANDOM_Midfol,
+         earlylut_v_periov = DEP_RANDOM_Periov) %>%
+   #just want 1 fixed effect per person (these were copied down for each daily rating)
+  group_by(ID) %>% slice(n=1) %>%
+  #MANUALLY add the fixed effect from the model to each random effect as a new variable
+  mutate(earlylut_v_midfol_plusfixed = earlylut_v_midfol+0.021,
+         earlylut_v_periov_plusfixed = earlylut_v_periov-0.05)
+
+##ref group D: periov
+#remove duplicates/extraneous
+data_randomeffects_DepD <- data_randomeffects_DepD %>%
+  select(-c(DEPRESSION, starts_with("LH_"), 
+            ends_with("_SE"),
+            DEP_RANDOM_perimen, DEP_RANDOM_perimen_SE,
+            DEP_RANDOM_MidLut, DEP_RANDOM_Midlut_SE,
+            DEP_RANDOM_EarlyLut, DEP_RANDOM_EarlyLut_SE)) %>%
+  relocate(ID, DEP_RANDOM_Midfol) %>%
+  #rename the predictor variables to denote what their reference group is
+  rename(periov_v_midfol = DEP_RANDOM_Midfol) %>%
+   #just want 1 fixed effect per person (these were copied down for each daily rating)
+  group_by(ID) %>% slice(n=1) %>%
+  #MANUALLY add the fixed effect from the model to each random effect as a new variable
+  mutate(periov_v_midfol_plusfixed = periov_v_midfol-0.029)
+
+#merge to one random effect dataset
+#(I just learned that the function "reduce" can merge multiple data frames, but this code goes two at a time)
+suimed_data_random_AB <- full_join(data_randomeffects_DepA, data_randomeffects_DepB, by="ID")
+suimed_data_random_ABC <- full_join(suimed_data_random_AB, data_randomeffects_DepC, by="ID")
+suimed_data_random_ABCD <- full_join(suimed_data_random_ABC, data_randomeffects_DepD, by="ID")
+
+```
+
+#Step 3. Plot code
+```{r}
+
+suimed_raincloud_DEP <- suimed_data_random_ABCD %>%
+  #pivoting is necessary to get ALL random effects as one variable, rather than 6 columns
+  pivot_longer(
+    cols = ends_with("plusfixed"),
+    names_to = "pairwise",
+    values_to = "randomeffect") %>%
+  #aesthetics will be your new pivoted columns
+  ggplot(aes(x=pairwise, y=randomeffect, color=pairwise))+
+  #boxplot!
+  geom_boxplot(fill=NA,
+                width = 0.2,
+                outlier.color = NA)+
+  #half histogram1
+  ggdist::stat_halfeye(aes(fill=pairwise), 
+                       adjust = 0.5, width=0.6, justification=-0.3, .width = 0, point_colour=NA)+
+  #scatter!
+  geom_point(size=1,alpha=0.2, position = position_jitter(seed=1, width = 0.1))+
+  #everything from here down is just formatting and labeling
+  scale_color_discrete(guide="none")+
+  scale_fill_discrete(name="Cycle Phase Contrast",
+                      limits = c("earlylut_v_midfol_plusfixed",
+                                 "earlylut_v_periov_plusfixed",
+                                 "midlut_v_earlylut_plusfixed",
+                                 "midlut_v_midfol_plusfixed",
+                                 "midlut_v_periov_plusfixed",
+                                 "perimens_v_earlylut_plusfixed",
+                                 "perimens_v_midfol_plusfixed",
+                                 "perimens_v_midlut_plusfixed",
+                                 "perimens_v_periov_plusfixed",
+                                 "periov_v_midfol_plusfixed"),
+                      labels=c("E.LUT vs MIDFOL",
+                               "E. LUT vs PERIOV",
+                               "MIDLUT vs E.LUT",
+                               "MIDLUT vs MIDFOL",
+                               "MIDLUT vs PERIOV",
+                               "PERIMENS vs E.LUT",
+                               "PERIMENS vs MIDFOL",
+                               "PERIMENS vs MIDLUT",
+                               "PERIMENS vs PERIOV",
+                               "PERIOV vs MIDFOL"))+
+  coord_cartesian(xlim=c(1.2, NA), clip = "off")+
+  theme_bw()+
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank())+
+  ylab("Fixed + Random Effect")+
+  ggtitle("individual differences of cycle phase on depression")+
+  labs(fill="Cycle Phase Contrast")+
+  geom_hline(yintercept = 0, linetype="dashed", color="gray")+
+  geom_text(aes(x=1, y=-2), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="  (-)higher DEP \n in E.LUT")+
+  geom_text(aes(x=1, y=3), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="    (+)higher DEP \n in MIDFOL")+
+  geom_text(aes(x=2, y=-2.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in E.LUT")+
+  geom_text(aes(x=2, y=3.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in PERIOV")+
+  geom_text(aes(x=3, y=-2), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in MIDLUT")+
+  geom_text(aes(x=3, y=3), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in E.LUT")+
+  geom_text(aes(x=4, y=-2.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in MIDLUT")+
+  geom_text(aes(x=4, y=3.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in MIDFOL")+
+  geom_text(aes(x=5, y=-2), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in MIDLUT")+
+  geom_text(aes(x=5, y=3), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in PERIOV")+
+  geom_text(aes(x=6, y=-2.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in PERIMENS")+
+  geom_text(aes(x=6, y=3.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in E.LUT")+
+  geom_text(aes(x=7, y=-2), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in PERIMENS")+
+  geom_text(aes(x=7, y=3), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in MIDFOL")+
+  geom_text(aes(x=8, y=-2.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in PERIMENS")+
+  geom_text(aes(x=8, y=3.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in MIDLUT")+
+  geom_text(aes(x=9, y=-2), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in PERIMENS")+
+  geom_text(aes(x=9, y=3), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in PERIOV")+
+  geom_text(aes(x=10, y=-2.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(-)higher DEP \n in PERIOV")+
+  geom_text(aes(x=10, y=3.25), check_overlap = TRUE, fontface="italic", size=3,color="black",
+            label="(+)higher DEP \n in MIDFOL")
+suimed_raincloud_DEP %>% ggsave(filename = "2022-08-02 suimed_ranef_dep.png", 
+                                                width = 12, height = 5,
+                                                units = c("in"),
+                                                device = "png")
+```
+
+# plot variables by attempter status
+
+## import trait data, merge, clean, create summary variable
+**If lifetime attempt, lifetime aborted attempt, or lifetime interrupted attempt equal 1 --> "LT_attempt_any_yn" ==1**
+```{r}
+
+suimednonmissing <- read_sav("Mergeddaily_Final.sav")
+c1trait <- read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR1/02_datasets/CLEAR1_TRAIT/03_cleaned_data/2022-01-06_CLEAR1_TRAIT.sav")
+c2trait <- read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_TRAIT/03_cleaned_data/2021-12-29_clear2traitscid.sav")
+c3trait <- read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR3/02_datasets/CLEAR3_TRAIT/03_cleaned_data/2022-08-16 clear3traitscidsitbi.sav")
+
+#little formatting things that need to be fixed to merge trait (pulled from script cycle-etoh-03)
+c1trait$rel_years <-as.character(c1trait$rel_years)
+c2trait$diet <-as.character(c2trait$diet)
+c2trait$numpregnancies <-as.numeric(c2trait$numpregnancies)
+c1trait$PPDpregmnths <- as.numeric(c1trait$PPDpregmnths)
+c2trait$SES_occupation <- as.character(c2trait$SES_occupation)
+c2trait <- c2trait %>% mutate(across(starts_with("SES_zipcode"), as.character))
+c2trait$age <- as.numeric(c2trait$age)
+c1trait$age <- as.numeric(c1trait$age)
+c3trait <- c3trait %>% rename(age=Age,
+                              LTattemptyn = Attempt_yn,
+                              LTabattyn = AbortedAtt_yn,
+                              LTintattyn = Interrupted_Att_yn)
+
+#remove the trait scales that we know are not needed here
+c1trait <- c1trait %>% select(c(1:133,
+                     starts_with("current"),
+                     starts_with("lifetime"),
+                     starts_with("LT")))
+c2trait <- c2trait %>% select(c(1:133,
+                     starts_with("current"),
+                     starts_with("lifetime"),
+                     starts_with("LT")))
+
+
+#merge trait
+temptrait <- full_join(c1trait, c2trait)
+trait <- full_join(temptrait, c3trait)
+trait <- trait %>% arrange(id)
+
+trait$LTattemptyn
+trait$LTabattyn
+trait$LTintattyn
+
+trait %>% mutate(LTattempt_any_yn = ifelse(LTattemptyn==1 |
+                                             LTintattyn==1 | 
+                                             LTattemptyn ==1, 1, 0)) %>% 
+  select(id, LTattemptyn, LTabattyn, LTintattyn, LTattempt_any_yn)
+
+trait <- trait %>% mutate(LTattempt_any_yn = ifelse(LTattemptyn==1 |
+                                             LTintattyn==1 | 
+                                             LTattemptyn ==1, 1, 0))
+
+```
+
+#plot outcomes by LT attempt status
+```{r}
+suimeddailytrait <- left_join(suimeddata_cycleday, trait)
+
+
+testplot_LTattempt1 <- suimeddailytrait %>% filter(LTattemptyn==1) %>%
+  group_by(hybridcycleday) %>%
+  summarize(personcentered.dev = mean(SI_Final.d, na.rm=T),
+            se=sd(SI_Final.d, na.rm=T)/sqrt(n())) %>%
+  arrange(factor(hybridcycleday, levels = hybridcycleday_order)) %>%
+  mutate(roll= rollapply(personcentered.dev, 3, 
+                         mean, align = "center", fill=NA)) %>%
+    mutate(LTattemptyn= "1")
+
+testplot_LTattempt0 <- suimeddailytrait %>% filter(LTattemptyn==0) %>%
+  group_by(hybridcycleday) %>%
+  summarize(personcentered.dev = mean(SI_Final.d, na.rm=T),
+            se=sd(SI_Final.d, na.rm=T)/sqrt(n())) %>%
+  arrange(factor(hybridcycleday, levels = hybridcycleday_order)) %>%
+  mutate(roll= rollapply(personcentered.dev, 3, 
+                         mean, align = "center", fill=NA)) %>%
+    mutate(LTattemptyn= "0")
+
+data_suimed_by_LTattempt <- full_join(testplot_LTattempt0, testplot_LTattempt1)
+
+
+# New facet label names for faceting variable
+facet.labs <- c("No lifetime suicide attempt", "Lifetime suicide attempt* (*aborted, interrupted, or actual)")
+names(facet.labs) <- c("0", "1")
+
+
+data_suimed_by_LTattempt %>%
+  ggplot(aes(x=factor(hybridcycleday, levels = hybridcycleday_order), y=roll,
+             group=LTattemptyn,fill=LTattemptyn))+
+  geom_line()+
+  geom_ribbon(aes(ymin=roll-se,
+                  ymax=roll+se),
+                  alpha=0.2)+
+  facet_wrap(~LTattemptyn, labeller = labeller(LTattemptyn=facet.labs))+
+  ylab("Person-centered SI (3-day rolling average)")+
+  xlab("Cycle Day (hybrid count)")+
+  theme_bw()+
+  guides(fill=FALSE)+
+  theme(strip.text.x = element_text(size=24),
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=16),
+        axis.title.y = element_text(size=24),
+        axis.title.x = element_text(size=24))
+  
+  
+
+```
+
+===archive
+### plot just asiq9 as an example of line graph by cycle phase then cycle day
+```{r}
+
+
+suimeddata <- suimeddata %>%
+  group_by(id) %>%
+  mutate(ASIQ9_wishdead.m = mean(ASIQ9_wishdead, na.rm = TRUE))
+suimed_data_for_plot1a_asiq9 <- suimeddata %>% 
+  group_by(id, LH_cyclephasenames) %>% 
+  summarize(ASIQ9_wishdead.m=mean(ASIQ9_wishdead.m),
+            ASIQ9_wishdead.phase.m = mean(ASIQ9_wishdead, na.rm = TRUE),
+            ASIQ9_wishdead.phase.d = ASIQ9_wishdead.phase.m - ASIQ9_wishdead.m)
+
+
+suimed_data_for_plot1a_asiq9 %>% 
+  group_by(LH_cyclephasenames) %>%
+  summarize(grand.m.ASIQ9_wishdead.d = mean(ASIQ9_wishdead.phase.d, na.rm=T),
+            se=sd(ASIQ9_wishdead.phase.d, na.rm=T)/sqrt(n())) %>%
+  ggplot(aes(x=LH_cyclephasenames, y=grand.m.ASIQ9_wishdead.d))+
+  geom_line(group=1)+
+  scale_x_discrete(labels=c("midfol" = "Midfollicular", 
+                            "midlut" = "Midluteal",
+                            "earlylut" = "Early Luteal",
+                            "perimen" = "Perimenstrual",
+                            "periov" = "Periovulatory"))+
+  geom_errorbar(aes(ymin=grand.m.ASIQ9_wishdead.d-se, 
+                    ymax=grand.m.ASIQ9_wishdead.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw(base_size = 11)+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered ASIQ9")
+
+#run cycle day plot on asiq9
+suimed_data_for_plot_asiq9 <- suimeddata_cycleday %>% group_by(id, hybridcycleday) %>% 
+  filter(!is.na(hybridcycleday)) %>%
+  summarize(ASIQ9_wishdead.m=mean(ASIQ9_wishdead.m),
+            ASIQ9_wishdead.day.m = mean(ASIQ9_wishdead, na.rm = TRUE),
+            ASIQ9_wishdead.day.d = ASIQ9_wishdead.day.m - ASIQ9_wishdead.m) %>%
+  arrange(factor(hybridcycleday, levels = hybridcycleday_order))
+
+suimed_data_for_plot_asiq9 %>% group_by(hybridcycleday) %>%
+  summarize(personcentered.dev = mean(ASIQ9_wishdead.day.d, na.rm=T),
+            se=sd(ASIQ9_wishdead.day.d, na.rm=T)/sqrt(n())) %>%
+  arrange(factor(hybridcycleday, levels = hybridcycleday_order)) %>%
+  mutate(roll= rollapply(personcentered.dev, 3, 
+                         mean, align = "center", fill=NA)) %>%
+  ggplot(aes(x=factor(hybridcycleday, levels = hybridcycleday_order), y=roll))+
+  geom_line(group=1)+
+  geom_hline(yintercept = 0, linetype="dashed", col="red")+
+  geom_errorbar(aes(ymin=roll-se, ymax=roll+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  scale_y_continuous(expand = c(0,0.005))+
+  theme_bw()+
+  xlab("Cycle Day (based on LH-surge and menses self-report)")+
+  ylab("Person-Centered ASIQ9")
+
+
+```
+
