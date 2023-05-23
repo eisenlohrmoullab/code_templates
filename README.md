@@ -46,6 +46,10 @@ As of April 10th 2023, Data Team decided to keep a list of code_templates in the
 - what it does: how to extract the id groups in your model and compare them to the id's in your analytic dataset. You can then investigate the id's that are not being used in your model and determine why they are not being used in the model (e.g. dropped out or withdrawn right after enrollment, did not have enough cycledays, ghosted, dropped out before they menstruated, etc.). You can also use this code to ensure all your demographic tables and descriptive analyses are done on the list of id's that are being utilized by your analytic models.
 - when to use: any MLM using lmertest or lme4
 
+**model_logtransform_and_backtransform**
+- author: Anisha 
+- what is does: You may have log-transformed your outcome variable prior to analysis by regression in order to approximate your residuals to a normal distribution, or you may have analysed count data using a Poisson generalized linear model (GLM) with a log link function. In both types of situations, the estimates you obtain from your analysis, and their standard errors, are on the transformed scale. This template walks through how to check if your MLM is violating assumptions on normality of level 1 residuals, how to log-transform your data, and how to backtransform your model results. 
+
 ## Plot Templates
 
 **plot_cyclephase and day-KY.Rmd**
