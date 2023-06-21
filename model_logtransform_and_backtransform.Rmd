@@ -1,0 +1,169 @@
+---
+title: "model_when to logtransform and how to backtransforming log transformed estimates"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output: html_document
+---
+When to use this template: You may have log-transformed your outcome variable prior to analysis by regression in order to approximate your residuals to a Normal distribution, or you may have analysed count data using a Poisson generalized linear model (GLM) with a log link function. In both types of situations, the estimates you obtain from your analysis, and their standard errors, are on the transformed scale. However, when reporting your results, you may want to transform them back to the original scale to aid interpretation.
+
+```{r}
+library(lme4)
+library(ggplot2)
+library(tidyverse)
+library(dfoptim)
+library(optimx)
+```
+
+
+
+## Simulating some fake data 
+- In this fake dataset we have id, a daily outcome variable (outcome), cycleday (menses = 0), and a trait level depression score (dep). We will use this to write a MLM model where cycleday, and dep are predicting a daily outcome.
+
+
+```{r}
+# Create the id variable
+id <- rep(seq(1, 50), each = 18)
+
+# Create the cycleday variable
+cycleday <- rep(-7:10, times = 50)
+
+#create dep variable
+dep <- rep(rnorm(50, 3, 1.25), each = 18)
+
+
+outcome <- exp(rnorm(900, 1, 0.3))
+
+
+# Combine id and cycleday into a dataframe
+df <- data.frame(id, cycleday, dep, outcome)
+```
+
+
+```{r}
+hist(df$outcome)
+```
+
+As you can see, this data is slightly right-skewed . 
+
+### Create MLM
+
+```{r}
+model <-lmer(outcome ~ dep   + (1 |id) + (1|cycleday), data = df, REML = T, control = lmerControl(optimizer ="bobyqa", optCtrl=list(maxfun=2e5)))
+summary(model)
+
+```
+There is singularity because I simulated the data and there is alevel of collinearity- just ignore.
+
+## Test Assumptions of MLM 
+
+The assumptions underlying MLMs are:
+
+- The model is correctly specified (i.e., all the predictors associated with the outcome and relevant random effects are included);
+- The functional form is correct (e.g., the relationship between the predictors and outcome is linear if using a linear model);
+- Level-1 residuals are independent and normally distributed;
+- Level-2 residuals are independent and multivariate normally distributed;
+- Residuals at level-1 and level-2 are unrelated;
+- Predictors at one level are not related to errors at another level (homoscedasticity).
+
+### Are the level 1 residuals normally distributed?
+
+```{r}
+df$resid <- residuals(model)
+
+hist(df$resid)
+
+```
+
+ Residuals are also right-skewed. 
+ 
+ We can also examine normality of residuals in qqplot. If the line is roughly straight, our distribution is roughly normal. This plots quantiles for two distributions against each other: what proportion of points in our distribution is in a given quantile (y-axis), and how does that compare to the proportion of points in a given quantile for our theoretical normal distribution (x-axis). The line is NOT straight. 
+ 
+```{r}
+df %>%
+ggplot(mapping = aes(sample = resid)) +
+  stat_qq()
+```
+ 
+ 
+ 
+### Testing if level 1 residuals are independent  
+ 
+```{r}
+df %>% 
+  ggplot(mapping = aes(x = dep, y = resid)) +
+  geom_point() +
+  labs(x = "depression", y = "residuals")
+
+cor.test(df$resid, df$dep)
+```
+
+There is no real pattern, so it seems the level 1 residuals are independent. 
+
+### Log-transforming the outcome 
+
+Lets log-transform the outcome and see if it improves the normality of results.You may need to +1 before log-tranforming, because you cannot take the log of zero.
+```{r}
+df$outcome.log <- (log(df$outcome))
+hist(df$outcome.log)
+```
+
+```{r}
+model2 <- lmer(outcome.log ~ dep  + cycleday + (1 + cycleday|id), data = df, REML = T, control = lmerControl(optimizer ="bobyqa", optCtrl=list(maxfun=2e5)))
+summary(model2)
+```
+
+Singularity still exists because I did a bad job simulating data, but let's ignore that. Let's check out the normality of our residuals. 
+
+```{r}
+df$resid2 <- residuals(model2, na.rm = T)
+
+hist(df$resid2)
+
+```
+
+```{r}
+
+df %>%
+ggplot(mapping = aes(sample = resid2)) +
+  stat_qq()
+```
+Our qqplot is more line-like, log-tranforming the data allowed our residuals to be normally distributed!
+
+## Back-transforming
+
+```{r}
+summary(model2)
+```
+
+So what if we want to back-transform our estimates? We cannot simply exponentiate standard errors. 
+
+### Back-transforming standrard errors
+
+$$exp(\mu)*se = \text{back-transformed standard error}$$
+$$exp(\mu) = \text{back-transformed mean}$$
+However, back-transformed confidence intervals are more stable than backtransformed standard errors. 
+
+### Calculating Back-transformed Confidence Intervals
+
+- We can extract our mean depression estimate and its standard error from our model to calculate a precise confidence interval. Then we exponetiate the boundaries to calculate the back-transformed confidence interval. 
+
+```{r}
+m <- summary(model2)$coef[2] #mean 
+sderr <- summary(model2)$coef[5] #standard error 
+
+lb <- m - qnorm(.975)*sderr #lower bound of confidence interval
+ub <- m + qnorm(.975)*sderr #upper bound of confidence interval 
+
+```
+
+Exponentiate the estimate, and the upper and lower bounds of the confidence interval
+
+```{r}
+exp(m) #depression estimate 
+exp(lb) #lower bound of confidence interval
+exp(ub) #upper bound of confidence interval
+```
+
+
+
+

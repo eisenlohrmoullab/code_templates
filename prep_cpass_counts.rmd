@@ -1,0 +1,200 @@
+---
+title: "cpass_statistics"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(readxl)
+library(writexl)
+library(tidyr)
+library(stringr)
+library(kableExtra)
+```
+
+
+# Import aggregated cpass files 
+
+```{r}
+#CLEAR1
+file_path1 <- "C:/Users/anish/Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR1/02_datasets/CLEAR1_TRAIT/03_cleaned_data/CLEAR1_CPASS_aggregated.xlsx"
+sheet_name <- excel_sheets(file_path1)[2]
+df1 <- read_excel(file_path1, sheet = sheet_name)
+
+#CLEAR2 
+file_path2 <- "C:/Users/anish/Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_TRAIT/03_cleaned_data/CLEAR2 CPASS Aggregated Data.xlsx"
+sheet_name <- excel_sheets(file_path2)[2]
+df2 <- read_excel(file_path2, sheet = sheet_name)
+
+#CLEAR3
+file_path3 <- "C:/Users/anish/Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR3/02_datasets/CLEAR3_TRAIT/03_cleaned_data/CLEAR3_CPASS_aggregated.xlsx"
+sheet_name <- excel_sheets(file_path3)[2]
+df3 <- read_excel(file_path3, sheet = sheet_name)
+
+```
+
+
+## Subset based on N in sample 
+
+```{r}
+#lowercase all names 
+names(df1) <- tolower(names(df1))
+names(df2) <- tolower(names(df2))
+names(df3) <- tolower(names(df3))
+
+#rbind df1, df2, and df3
+df <- rbind(df1, df2, df3)
+
+df$id <- as.numeric(df$id)
+
+#subset based on N in sample 
+
+NinSample = c(1,2,3, 4, 5, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 26, 28, 29, 31, 33, 36, 37, 39, 201, 202, 203, 204, 205, 206, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 219, 220, 221, 222, 224, 225, 226, 227, 229, 230, 231, 233, 234, 235, 236, 238, 239, 242, 243, 244, 247, 249, 252, 254, 255, 256, 257, 259, 260, 261, 3001, 3002, 3003, 3004, 3006, 3007, 3008, 3009, 3011, 3012, 3013, 3014, 3016, 3018, 3019, 3021, 3022, 3023, 3024, 3025, 3026, 3028, 3029, 3030, 3032, 3033, 3038, 3039, 3041, 3042, 3043, 3044, 3045, 3046, 3050, 3052, 3053, 3055, 3056, 3058, 3060, 3062, 3064, 3066, 3067) #INSERT the id's included in your analytic sample
+
+df <- df[df$id %in% NinSample, ]
+
+
+setdiff(NinSample, df$id)#any spass's you are missing 
+
+```
+
+## N w/ PMDD
+```{r}
+id_cols <- grep("id", names(df))
+sx_cols <- grep("sx", names(df))
+exclude_cols <- c(id_cols, sx_cols)
+# Find the indices of columns that do not match the patterns "id" or "sx"
+keep_cols <- setdiff(1:ncol(df), exclude_cols)
+# View the indices of columns to keep
+keep_cols
+
+df[, keep_cols] <- lapply(df[, keep_cols], as.numeric)
+
+sums <- list()
+for (col in keep_cols) {
+  col_name <- names(df)[col]
+  sums[[col_name]] <- sum(df[, col], na.rm = T)
+}
+df_sums <- data.frame(do.call(cbind, sums))
+kable(t(df_sums))
+```
+
+```{r}
+df_sums$drsp1_30 <- df_sums$X30_perc.drsp1 + df_sums$mrmd_drsp1 + df_sums$pme_drsp1
+df_sums$drsp2_30 <- df_sums$X30_perc.drsp2 + df_sums$mrmd_drsp2 + df_sums$pme_drsp2
+df_sums$drsp3_30 <- df_sums$X30_perc.drsp3 + df_sums$mrmd_drsp3 + df_sums$pme_drsp3
+df_sums$drsp4_30 <- df_sums$X30_perc.drsp4 + df_sums$mrmd_drsp4 + df_sums$pme_drsp4
+df_sums$drsp5_30 <- df_sums$X30_perc.drsp5 + df_sums$mrmd_drsp5 + df_sums$pme_drsp5
+df_sums$drsp6_30 <- df_sums$X30_perc.drsp6 + df_sums$mrmd_drsp6 + df_sums$pme_drsp6
+df_sums$drsp7_30 <- df_sums$X30_perc.drsp7 + df_sums$mrmd_drsp7 + df_sums$pme_drsp7
+df_sums$drsp8_30 <- df_sums$X30_perc.drsp8 + df_sums$mrmd_drsp8 + df_sums$pme_drsp8
+kable(t(df_sums))
+```
+
+
+# N with PME (at least 1 cycle), N with MRMD (at least 1 cycle)
+
+```{r}
+# Select columns whose names end with "pme" using grep()
+pme_cols <- grep("pme$", names(df))
+# Compute row sums of selected columns using rowSums()
+rowPME <- rowSums(df[, pme_cols], na.rm = T)
+rowPME
+sum(rowPME != 0)
+#20 people
+
+
+
+##How many people with at least 1 cycle of PME?
+# For each id, if at least 1 of the variables 'cycle 1 pme', 'cycle 2 pme', 'cycle 3 pme', and 'cycle 4 pme' have a 1, set df$pme to 1
+# Create a new column 'df$pme' and set it to 0 for all rows
+df$pme <- 0
+
+# For each id, if at least 1 of the variables 'cycle 1 pme', 'cycle 2 pme', 'cycle 3 pme', and 'cycle 4 pme' have a 1, set df$pme to 1
+for (i in unique(df$id)) {
+  if (any(df[df$id == i, c('cycle 1 pme', 'cycle 2 pme', 'cycle 3 pme', 'cycle 4 pme')], na.rm = TRUE) == 1) {
+    df[df$id == i, 'pme'] <- 1
+  }
+}
+
+
+pmecols <- c('cycle 1 pme', 'cycle 2 pme', 'cycle 3 pme', 'cycle 4 pme')
+df %>% select("id", all_of(pmecols), pme)
+
+
+
+# For each id, if at least 1 of the variables 'cycle 1 mrmd', 'cycle 2 mrmd', 'cycle 3 mrmd', and 'cycle 4 mrmd' have a 1, set df$mrmd to 1
+for (i in unique(df$id)) {
+  if (any(df[df$id == i, c('cycle 1 mrmd', 'cycle 2 mrmd', 'cycle 3 mrmd', 'cycle 4 mrmd')], na.rm = TRUE) == 1) {
+    df[df$id == i, 'mrmd'] <- 1
+  }
+}
+
+
+mrmdcols <- c('cycle 1 mrmd', 'cycle 2 mrmd', 'cycle 3 mrmd', 'cycle 4 mrmd')
+df %>% select("id", all_of(mrmdcols), mrmd)
+
+
+sum(df$pme) #how many just PME
+sum(df$mrmd, na.rm = T) #how many just MRMD
+
+df %>% select("id", pme, mrmd)
+
+df$pmeplus <- df$pme
+df$pmeplus[df$mrmd == 1] <- 1
+df %>% select("id", pme, mrmd, pmeplus)
+sum(df$pmeplus) #PME inclusive of MRMD
+
+
+# #count how many people have PME and MRMD for cycle 1
+# sum(df$`cycle 1 mrmd` == 1 & df$`cycle 1 pme` == 1, na.rm = T) 
+# 
+# #count how many people have PME and no MRMD for cycle 1
+# sum(df$`cycle 1 pme` == 1 & df$`cycle 1 mrmd` == 0, na.rm = T) 
+# 
+# #count how many people have no PME and  MRMD for cycle 1
+# sum(df$`cycle 1 pme` == 0 & df$`cycle 1 mrmd` == 1, na.rm = T) 
+
+
+
+```
+
+
+
+
+# N with >=30% reduction from the premenstrual to postmenstrual phases of at least one core PMDD symptom (DRSP 1-8)
+
+```{r}
+perc_cols <- grep("^drsp", names(df))
+
+dfcount <- df[, c(1, perc_cols)]
+
+
+dfcount$drsp1_count <- rowSums(dfcount[startsWith(names(dfcount), "drsp1")], na.rm = T)
+dfcount$drsp2_count <- rowSums(dfcount[startsWith(names(dfcount), "drsp2")], na.rm = T)
+dfcount$drsp3_count <- rowSums(dfcount[startsWith(names(dfcount), "drsp3")], na.rm = T)
+dfcount$drsp4_count <- rowSums(dfcount[startsWith(names(dfcount), "drsp4")], na.rm = T)
+dfcount$drsp5_count <- rowSums(dfcount[startsWith(names(dfcount), "drsp5")], na.rm = T)
+dfcount$drsp6_count <- rowSums(dfcount[startsWith(names(dfcount), "drsp6")], na.rm = T)
+dfcount$drsp7_count <- rowSums(dfcount[startsWith(names(dfcount), "drsp7")], na.rm = T)
+dfcount$drsp8_count <- rowSums(dfcount[startsWith(names(dfcount), "drsp8")], na.rm = T)
+
+
+## Use rowSums() to count the number of rows with at least one 1 in drsp1_count to drsp8_count
+num_rows_with_1 <- sum(rowSums(dfcount[, grep("^drsp[1-8]_count$", names(dfcount))] > 0) > 0)
+### N with >=30% reduction from the premenstrual to postmenstrual phases of at least one core PMDD symptom (DRSP 1-8)
+
+drsp_cols <- dfcount[, grep("^drsp.*_count$", colnames(dfcount))]
+# Calculate the column sums
+sumsDRSP <- colSums(drsp_cols)
+# Create a data frame with the column sums, Number of participants with at least 1 cycle of >= 30% change for each of the following core PMDD sx 
+sums_DRSP <- data.frame(sumsDRSP)
+kable(sums_DRSP)
+
+```
+
