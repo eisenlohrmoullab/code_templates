@@ -9,13 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Hi Katja!
-Hi back!
-hello
 
-
-its hafsah 
-it's cassie, hi, I'm the problem it's cassie
 
 ## Import Data
 
