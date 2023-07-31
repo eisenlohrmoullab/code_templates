@@ -65,3 +65,4 @@ How to make sure you are pulling out your random slope variance correctly:
 
 - `r VarCorr(model)$id[4]` The brackets index values in this matrix. For my model, the random time slope variance was correctly indexed by 4. If you have more than 1 random slope, then 4 will not be the correct index. Change the number 4 to be the correct value for your random time slope variance that you noted down. You will need to edit the above function for the correct indexing number. If you only have 1 random time slope, 4 will likely be correct. 
 
+- If you have any questions, please reach out to Anisha :) 
