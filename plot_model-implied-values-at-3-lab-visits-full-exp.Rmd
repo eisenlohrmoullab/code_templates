@@ -1,0 +1,228 @@
+---
+title: "Lab Visit Prep and Plot"
+author: "Jordan Barone"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## packages
+```{r}
+library(haven) #for reading files
+library(tidyverse) #for data management and manipulation, plotting
+library(readxl) #reading in excel files
+library(lme4) #mlm
+library(nlme) #mlm
+library(lmerTest) #mlm to pull p values
+library(emmeans) #plot interaction using model-implied estimated marginal means
+```
+
+### import files (just copied the example i used from clear2primary)
++ c2bio_d = clear2 daily dataset
+  + *cleaned and exported from clear2primary data prep file*
+  + labeled with c2bio_ prefix so I don't accidentally write over the cleaned daily dataset for clear2primary
++ c2bio = clear2biomarker analytic data
+```{r import data, echo=F}
+
+c2bio_d <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/03_analytic_projects/CLEAR2_PRIMARY/02_code_dataedits_output/PPc2d_full.csv")
+
+c2bio <- read_excel("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_LAB/01_raw_data/2022-07-27 - Pinna Lab NAS Assays - P4, ALLO, isomers - Copy of Summary of Partial Results CLEAR2.xlsx")
+c2l <- read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_LAB/03_cleaned_data/7.25.22 CLEAR 2 Repeated Lab Survey Cleaned.sav")
+c2l_staff <- read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_LAB/03_cleaned_data/2.1.23 CLEAR 2 Lab Visit Staff Data Entry Data Cleaned.sav")
+
+##e2 on its own
+c2e2 <- read_excel("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/02_datasets/CLEAR2_LAB/01_raw_data/2023-05-22 Copy of Summary of Partial Results CLEAR2.xlsx")
+
+```
+
+### skipping all the data prep code - im sure youve already done this for your models! ###
+
+# models
+```{r}
+
+e2_2 <- lme(e2.w.log ~ midlut*cond + antidepnolohi, 
+              random=~1|id, na.action=na.omit, data=c2bio)
+p4_2 <- lme(P4_ngml.w.log ~ midlut*cond + antidepnolohi, 
+              random=~1|id, na.action=na.omit, data=c2bio)
+allo_2 <- lme(allo.w.log ~ midlut*cond + antidepnolohi, 
+              random=~1|id, na.action=na.omit, data=c2bio)
+pa_2 <- lme(pregna.w.log ~ midlut*cond + antidepnolohi, 
+              random=~1|id, na.action=na.omit, data=c2bio)
+iso_2 <- lme(allo_5a3b.w.log ~ midlut*cond + antidepnolohi, 
+              random=~1|id, na.action=na.omit, data=c2bio)
+epi_2 <- lme(allo_5b3b.w.log ~ midlut*cond + antidepnolohi, 
+              random=~1|id, na.action=na.omit, data=c2bio)
+
+
+#make combo of variables
+#this makes an empty data fraome with every possible combination of lab visit and condition
+predict_data <- expand.grid(cond = c("PBO", "E2", "P4"),
+                  midlut = c("1", "2", "3"))
+
+#calc estimated marginal means for each model
+#format is emmeans(modelname, ~ interactionvar1 * interactionvar2)
+
+e2_emm <- emmeans(e2_2, ~ cond * midlut)
+e2_emm_df <- as.data.frame(summary(e2_emm, level = 0.95, type = "response", by = NULL))
+p4_emm <- emmeans(p4_2, ~ cond * midlut)
+p4_emm_df <- as.data.frame(summary(p4_emm, level = 0.95, type = "response", by = NULL))
+allo_emm <- emmeans(allo_2, ~ cond * midlut)
+allo_emm_df <- as.data.frame(summary(allo_emm, level = 0.95, type = "response", by = NULL))
+pa_emm <- emmeans(pa_2, ~ cond * midlut)
+pa_emm_df <- as.data.frame(summary(pa_emm, level = 0.95, type = "response", by = NULL))
+iso_emm <- emmeans(iso_2, ~ cond * midlut)
+iso_emm_df <- as.data.frame(summary(iso_emm, level = 0.95, type = "response", by = NULL))
+epi_emm <- emmeans(epi_2, ~ cond * midlut)
+epi_emm_df <- as.data.frame(summary(epi_emm, level = 0.95, type = "response", by = NULL))
+
+
+#combine into one df
+##this is annoyingly tedious and you could definitely write a function instead of copying and pasting
+##from the estimated marginal means you calculated above, this pulls out the predicted value, SE, lower CI limit, and upper CI limit, and adds them each as a column to the empty dataframe you made called "predict_data"
+predict_data$e2_pred <- predict(e2_emm, newdata = predict_data)
+predict_data$e2_SE <- e2_emm_df$SE
+predict_data$e2_lowerCI <- e2_emm_df$lower.CL
+predict_data$e2_upperCI <- e2_emm_df$upper.CL
+predict_data$p4_pred <- predict(p4_emm, newdata = predict_data)
+predict_data$p4_SE <- p4_emm_df$SE
+predict_data$p4_lowerCI <- p4_emm_df$lower.CL
+predict_data$p4_upperCI <- p4_emm_df$upper.CL
+predict_data$allo_pred <- predict(allo_emm, newdata = predict_data)
+predict_data$allo_SE <- allo_emm_df$SE
+predict_data$allo_lowerCI <- allo_emm_df$lower.CL
+predict_data$allo_upperCI <- allo_emm_df$upper.CL
+predict_data$pa_pred <- predict(pa_emm, newdata = predict_data)
+predict_data$pa_SE <- pa_emm_df$SE
+predict_data$pa_lowerCI <- pa_emm_df$lower.CL
+predict_data$pa_upperCI <- pa_emm_df$upper.CL
+
+# Convert to long format
+## long format is important if you want to make a facet plot where you group them by outcome (so instead of having all my NAS as their own columns, I needed to have a column called "model" with values of "E2, P4, ALLO, PA")
+#if you just want to graph them one at a time, can skip this probably
+predict_data_long <- predict_data %>%
+  group_by(cond, midlut) %>%
+  pivot_longer(cols = c("e2_pred":"pa_upperCI"),
+               names_to = c("model", ".value"),
+               names_sep = "_") %>%
+    mutate(model = factor(model, levels = c("e2", "p4", "allo", "pa", "iso", "epi"), 
+                        labels = c("ESTRADIOL", "PROGESTERONE", "ALLOPREGNANOLONE", "PREGNANOLONE", 
+                                   "ISOALLOPREGNANOLONE", "EPIPREGNANOLONE")))
+
+#trasnform into raw data
+## only need this step if your data is log-transformed! SKIP if in raw scale
+predict_data_long$pred_raw <- exp(predict_data_long$pred)
+predict_data_long$SE_raw <- exp(mean(predict_data_long$pred)) * predict_data_long$SE
+#confidence intervals too!
+predict_data_long$lowerCI_raw <- exp(predict_data_long$lowerCI)
+predict_data_long$upperCI_raw <- exp(predict_data_long$upperCI)
+```
+
+## assign vectors of shapes and colors  (these can be anything)
+```{r}
+cond_colors <- c("PBO" = "#1C2B3D", "E2"="#fccf12", "P4" = "#e61413")
+cond_lines <- c("PBO"= "dotted", "E2" = "solid", "P4"= "dashed")
+cond_shapes <- c("PBO"=19,"E2"=17,"P4"=15)
+```
+
+## option 1: Jordan's code, but weakness is getting pretty labels to fit on graphs with varying y axis ranges
+```{r}
+allnasplot <- predict_data_long %>% 
+  filter(model!="ESTRADIOL") %>%
+  filter(model!="PROGESTERONE") %>%
+ggplot(aes(x = midlut, y = pred_raw, color = cond, group=cond, shape=cond, fill=cond))+
+  geom_ribbon(aes(ymin = lowerCI_raw, ymax = upperCI_raw), alpha=0.1, color=NA) +
+  geom_line(size = 2, show.legend = FALSE)+
+  geom_point(size = 5)+
+  facet_wrap(~model, scales = "free_y")+
+  scale_x_discrete(limits = c("1", "2", "3"),
+                   labels = c("Midluteal\n (LH+7)", "Perimenstrual\n (LH+14)", "Late Follicular\n (LH+21)"))+
+      scale_color_manual(values = c("#1C2B3D", "#FDC90C", "#CC0000"),
+                   guide = guide_legend(override.aes = list(shape = c(16, 17, 15)))) +
+  scale_fill_manual(values = c("#1C2B3D", "#FDC90C", "#CC0000"))+
+  theme_linedraw()+
+  ylab("Model-implied hormone level")+
+  xlab("")+
+  ggtitle("Neuroactive Steroids")+
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 20),
+          axis.title.x = element_text(size=16, face="bold", margin = margin(t = 12)),
+          axis.title.y = element_text(size=16, face="bold", margin = margin(r = 12)),
+          axis.text.x = element_text(size = 12, face="bold"),
+          axis.text.y = element_text(size = 13, face="bold"),   
+          legend.text = element_text(size = 15), legend.title = element_blank())
+
+ggsave("plots/ALLNASplot.png",
+       plot = allnasplot,
+       width = 10, height = 6, dpi = 300)
+```
+
+
+
+## option 2: Anisha's tweaks to write a function that takes your model, the y label, and the places on the x axes where you need the boxes to fit
+```{r}
+
+NASplot <- function(modelname, ylabtext, ymaxbox1, yminbox1, yminbox2){
+  predict_data_long %>% filter(model== modelname) %>%
+  ggplot(aes(x = midlut, y = pred_raw, color = cond, group=cond, shape=cond))+
+  geom_line(size = 1, show.legend = FALSE, aes(linetype = cond))+
+  geom_point(size = 3)+
+  geom_ribbon(aes(ymin = lowerCI_raw, ymax = upperCI_raw), alpha = 0, color=NA) +
+  facet_wrap(~model)+
+  scale_x_discrete(limits = c("1", "2", "3"),
+                   labels = c("Midluteal\n (LH+7)", "Perimenstrual\n (LH+14)", "Late Follicular\n (LH+21)"))+
+      scale_color_manual(values = c(cond_colors),
+                   guide = guide_legend(override.aes = list(shape = cond_shapes))) +
+    scale_linetype_manual(values = cond_lines)+
+    scale_shape_manual(values = cond_shapes)+
+  theme_linedraw()+
+  ylab(ylabtext)+
+  xlab("")+
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+          plot.subtitle = element_text(hjust = 0.5, face = "bold", size = 12),
+          axis.title.y = element_text(face="bold", margin = margin(r = 12), size = 7),
+          axis.text.x = element_text(size = 8, face="bold"),
+          axis.text.y = element_text(face="bold"),   
+          legend.position = "none")+
+    #this annotation makes a box that says baseline
+    annotate("rect",
+             xmin = .66, xmax = 1.33, ymin = yminbox1, ymax = ymaxbox1,
+             fill = "white", color="black")+
+    annotate("text",
+             x = 1, y = ((ymaxbox1 + yminbox1)/2), label = "Baseline", color = "black", fontface = "bold",
+             hjust = 0.5, vjust = 0.5, size=3)+
+    #this annotation makes a box that says experimental phase
+    annotate("rect",
+             xmin = 1.5, xmax = 2.5, ymin = yminbox2, ymax = ymaxbox1, fill = "black") +
+    annotate("text",
+             x = 2, y = ((ymaxbox1 + yminbox2)/2), label = "Experimental\n Phase", color = "white", fontface = "bold",
+             hjust = 0.5, vjust = 0.5, size=2.5)+
+    #this annotation makes a box that says withdrawal
+    annotate("rect",
+             xmin = 2.6, xmax = 3.4, ymin = yminbox1, ymax = ymaxbox1, fill = "white", color="black") +
+    annotate("text",
+             x = 3, y = ((ymaxbox1 + yminbox1)/2), label = "Withdrawal", color = "black", fontface = "bold",
+             hjust = 0.5, vjust = 0.5, size=3)+
+   annotate("rect", xmin = 1.5, xmax = 2.5, ymin = -0, ymax = yminbox2, fill = "black", alpha = 0.1)
+
+}
+
+```
+
+
+## If using option 2: run the NASplot function, giving it the name of the model, the y axislabel, and y axis locations for the pretty boxes that say "baseline" "experimental" etc
+```{r}
+allo_plot <- NASplot("ALLOPREGNANOLONE", "pg/ml", 10000, 9300, 8450)
+pa_plot <- NASplot("PREGNANOLONE", "pg/ml", 10000, 9300, 8450)
+iso_plot <- NASplot("ISOALLOPREGNANOLONE", "", 40000, 37000, 33600)
+epi_plot <- NASplot("EPIPREGNANOLONE", "", 1600, 1475, 1375)
+
+#use "grid.arrange" to put all of the plots that you made with unique axes and labels on 1 plot
+ms_plot <- grid.arrange(e2_plot,p4_plot, allo_plot, pa_plot, ncol=2)
+
+ggsave(plot = ms_plot, 
+       filename = "2023-06-09 E-P-ALLO-PA.png",
+       path = "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CLEAR2/03_analytic_projects/CLEAR2_PRIMARY/03_writing/",
+       device = "png")
+
+```
+
+
+
