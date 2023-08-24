@@ -1,0 +1,68 @@
+---
+title: "model_pseudo_R2_template"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output: html_document
+---
+## Import Data
+
+Use this first code chunk below to import your libraries, set your working directory (file path where you would like to save your output), import your data, and subset your data. The libraries included below are some commonly useful libraries. Using hashtags to add headers to your RMarkdown (outside of code chunks) is helpful for people using your file to navigate the file using the outline bar in Rstudio. Also you can label all of your code chunks to help with file navigation. Here is a cheatsheet for RMarkdown: https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf
+
+```{r libraries and data import}
+library(haven) #for reading files, especially useful for importing SPSS files 
+library(ggplot2) #for plotting
+library(tidyverse) #for data management and manipulation
+
+
+#setwd("")
+
+#read_csv() #using haven, you can also use read.csv() in base R
+
+#make sure using csv with correct sub-sample 
+
+
+```
+
+## Include your analytic code 
+
+Throughout your code chunks, comment heavily so people can follow your code easily. Longer interpretations and explanations can also be written outside of your code chunks. 
+
+$$\text{pseudo-}R^2 = \frac{\tau_{11\text{reduced}}-\tau_{11\text{full}}}{\tau_{11\text{reduced}}}$$
+
+
+### Full model 
+
+```{r}
+model1_NA <- lme4::lmer(neg_affect ~ pretime_scale + posttime_scale + StressCT_z + age_z + SSRI + StressCT_z:pretime_scale + StressCT_z:posttime_scale + SSRI:pretime_scale + SSRI:posttime_scale + (1 + pretime_scale|id), data = dat, REML = TRUE)
+summary(model1_NA)
+```
+
+### Reduced Model 
+
+```{r}
+model1_NA_r <- lme4::lmer(neg_affect ~ pretime_scale + posttime_scale + StressCT_z  + age_z + SSRI + SSRI:pretime_scale + SSRI:posttime_scale + (1 + pretime_scale|id), data = dat, REML = TRUE)
+```
+
+### Level 2 Pseudo R-squared Function
+
+```{r}
+lvl2R2 <- function(reduced, full){
+  (VarCorr(reduced)$id[4]-VarCorr(full)$id[4])/(VarCorr(reduced)$id[4]) #make sure you check the '4' index to make sure it matches your model 
+}
+
+lvl2R2(model1_NA_r, model1_NA)
+```
+
+How to make sure you are pulling out your random slope variance correctly: 
+
+- First do `r summary(model)`
+
+- Under random effects, you should see your random intercept variance and standard deviation and your random time slope variance and standard deviation. 
+
+- Note down the random time slope variance number, this is the value that should go into the Level 2 Pseudo R-squared function and is noted by $\tau_{11}$ in the equation above 
+
+- To specifically call the variances and covariances of your model, use the function `r VarCorr(model)$id` to examine the variance/covariance matrix of your model. The variance of your random time slope will be one of the values in this matrix 
+
+- `r VarCorr(model)$id[4]` The brackets index values in this matrix. For my model, the random time slope variance was correctly indexed by 4. If you have more than 1 random slope, then 4 will not be the correct index. Change the number 4 to be the correct value for your random time slope variance that you noted down. You will need to edit the above function for the correct indexing number. If you only have 1 random time slope, 4 will likely be correct. 
+
+- If you have any questions, please reach out to Anisha :) 
