@@ -1,0 +1,47 @@
+---
+title: "Simple Raincloud Plots Using ggrain"
+author: "Anna Patterson"
+date: "2023-11-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## Import Data
+
+```{r libraries and data import}
+library(haven) #for reading files, especially useful for importing SPSS files 
+library(ggplot2) #for plotting
+library(tidyverse) #for data management and manipulation
+library(ggpubr) #for plotting 
+library(ggdist) #for visualization 
+library(ggrain) #for raincloud plots 
+
+
+#setwd("")
+
+#read_csv() #using haven, you can also use read.csv() in base R
+
+#make sure using csv with correct sub-sample 
+
+
+```
+
+## Analytic code 
+
+#This is a "quick and dirty" way to get raincloud plots using ggrain. Can be useful when first looking at data, but use other R templates for figure-worthy plots. 
+
+ggplot(df, aes(1, var)) + #input your df and variable of interest here 
+  geom_rain() +
+  theme_classic() +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank(), axis.ticks.x = element_blank()) #leave the other four lines alone!
+
+
+#ggrain citation below      
+#Allen M, Poggiali D, Whitaker K, Marshall TR, van Langen J, Kievit RA (2021). “Raincloud plots: a multi-platform tool for robust data visualization [version 2; peer review: 2 approved].” Wellcome Open Research, 4(63). doi:10.12688/wellcomeopenres.15191.2.
+
